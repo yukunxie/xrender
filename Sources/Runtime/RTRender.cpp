@@ -34,6 +34,43 @@
 
 extern std::map<int, MeshComponent*> GMeshComponentProxies;
 
+static Color4f _ProcessRayHitResult(RxImage* renderTarget, PBRRender& pbrRender, const GlobalConstantBuffer& cGlobalBuffer, const BatchBuffer& cBatchBuffer, const ShadingBuffer& cShadingBuffer, float u, float v, int geomID, int primID)
+{
+	if (geomID != RTC_INVALID_GEOMETRY_ID)
+	{
+		auto  meshProxy = GMeshComponentProxies[geomID];
+
+		uint32 v0, v1, v2;
+		std::tie(v0, v1, v2) = meshProxy->GetGeometry()->GetIndexBuffer()->GetVerticesByPrimitiveId(primID);
+
+		Vector2f uv0 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector2f>(VertexBufferAttriKind::TEXCOORD, v0);
+		Vector2f uv1 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector2f>(VertexBufferAttriKind::TEXCOORD, v1);
+		Vector2f uv2 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector2f>(VertexBufferAttriKind::TEXCOORD, v2);
+
+		Vector3f n0 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::NORMAL, v0);
+		Vector3f n1 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::NORMAL, v1);
+		Vector3f n2 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::NORMAL, v2);
+
+		Vector3f p0 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::POSITION, v0);
+		Vector3f p1 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::POSITION, v1);
+		Vector3f p2 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::POSITION, v2);
+
+		Vector2f uv		= uv0 * u + uv1 * v + uv2 * (1.0f - u - v);
+		Vector3f normal = n0 * u + n1 * v + n2 * (1.0f - u - v);
+		Vector3f pos	= p0 + u * (p1 - p0) + v * (p2 - p0);
+
+		auto material = meshProxy->GetMaterial();
+
+		Color4f frag = pbrRender.Render(cGlobalBuffer, cBatchBuffer, cShadingBuffer, pos, normal, uv, material);
+
+		return frag;
+	}
+	else
+	{
+		return Color4f(0.0f);
+	}
+}
+
 void RTRender(Vector3f pos, Vector3f foucs, Vector3f up, RxImage* renderTarget, RTCScene scene, PBRRender& pbrRender)
 {
 	SCOPED_PROFILING_GUARD("RayTracingRender");
@@ -90,87 +127,21 @@ void RTRender(Vector3f pos, Vector3f foucs, Vector3f up, RxImage* renderTarget, 
 
 			rtcIntersect1(scene, &rayhit);
 
-			if (rayhit.hit.geomID != RTC_INVALID_GEOMETRY_ID)
+			ShadingBuffer cShadingBuffer;
 			{
-				float u			= rayhit.hit.u;
-				float v			= rayhit.hit.v;
-				auto  meshProxy = GMeshComponentProxies[rayhit.hit.geomID];
-
-				uint32 v0, v1, v2;
-				std::tie(v0, v1, v2) = meshProxy->GetGeometry()->GetIndexBuffer()->GetVerticesByPrimitiveId(rayhit.hit.primID);
-
-				Vector2f uv0 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector2f>(VertexBufferAttriKind::TEXCOORD, v0);
-				Vector2f uv1 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector2f>(VertexBufferAttriKind::TEXCOORD, v1);
-				Vector2f uv2 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector2f>(VertexBufferAttriKind::TEXCOORD, v2);
-
-				Vector3f n0 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::NORMAL, v0);
-				Vector3f n1 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::NORMAL, v1);
-				Vector3f n2 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::NORMAL, v2);
-
-				Vector3f p0 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::POSITION, v0);
-				Vector3f p1 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::POSITION, v1);
-				Vector3f p2 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::POSITION, v2);
-
-				Vector2f uv		= uv0 * u + uv1 * v + uv2 * (1.0f - u - v);
-				Vector3f normal = n0 * u + n1 * v + n2 * (1.0f - u - v);
-				Vector3f pos	= p0 + u * (p1 - p0) + v * (p2 - p0);
-
-				auto material = meshProxy->GetMaterial();
-
-				auto texture = material->GetTexture("tAlbedo");
-
-				ShadingBuffer cShadingBuffer;
-				{
-					cShadingBuffer.baseColorFactor = Vector4f(1.0f);
-					cShadingBuffer.emissiveFactor  = Vector4f(0.0f);
-					cShadingBuffer.metallicFactor  = 0.0f;
-					cShadingBuffer.roughnessFactor = 0.5f;
-				}
-
-				// Color4B color = pbrRender.Render(cGlobalBuffer, cBatchBuffer, cShadingBuffer, pos, normal, uv, material);
-				Color4f frag = pbrRender.Render(cGlobalBuffer, cBatchBuffer, cShadingBuffer, pos, normal, uv, material);
-				Color4B color(int(frag.x * 255), int(frag.y * 255), int(frag.z * 255), 255);
-
-
-				// Color3B color = texture->SamplePixel(uv.x, uv.y);
-				renderTarget->WritePixel(x, y, color.r, color.g, color.b);
-
-				////printf("%d ", (int)(rayhit.hit.primID));
-
-				// std::uint8_t r ;//= uv.x * 255;
-				// std::uint8_t g ;//= uv.y * 255 * 0;
-				// std::uint8_t b ;//= 0;
-
-				////Color3B color = loadImage.SamplePixel(uv.x, uv.y);
-				// auto color = sampler->SamplePixel(&loadImage, uv.x * 2, uv.y * 3);
-				// renderImage.WritePixel(x, y, color.r, color.g, color.b);
-
-				/*data[(x * height + y) * channels_num + 0] = uv.x * 255;
-				data[(x * height + y) * channels_num + 1] = uv.y * 255 * 0;
-				data[(x * height + y) * channels_num + 2] = 0;*/
-
-				/*data[(x * height + y) * channels_num + 0] = (unsigned char)(255.0 * x / width);
-				data[(x * height + y) * channels_num + 1] = (unsigned char)(255.0 * y / height);
-				data[(x * height + y) * channels_num + 2] = (unsigned char)(255.0 * 0.2);*/
-
-				// renderImage.WritePixel(x, y, (unsigned char)(255.0 * x / width), (unsigned char)(255.0 * y / height), (unsigned char)(255.0 * 0.2));
-
-				/*renderImage.WritePixel(x, y, (unsigned char)(255.0 * x / width), (unsigned char)(255.0 * y / height), (unsigned char)(255.0 * 0.2));*/
-			}
-			else
-			{
-				renderTarget->WritePixel(x, y, 0, 0, 0);
-				/*data[(x * height + y) * channels_num + 0] = 0;
-				data[(x * height + y) * channels_num + 1] = 0;
-				data[(x * height + y) * channels_num + 2] = 0;*/
+				cShadingBuffer.baseColorFactor = Vector4f(1.0f);
+				cShadingBuffer.emissiveFactor  = Vector4f(0.0f);
+				cShadingBuffer.metallicFactor  = 0.0f;
+				cShadingBuffer.roughnessFactor = 0.5f;
 			}
 
-
-			/*Ray ray( Vec3fa(ispcCamera.xfm.p),
-					Vec3fa(normalize(x * camera.xfm.l.vx + y * camera.xfm.l.vy + camera.xfm.l.vz)),
-					0.0f,
-					inf,
-					time);*/
+			float u		 = rayhit.hit.u;
+			float v		 = rayhit.hit.v;
+			int	  primID = rayhit.hit.primID;
+			int	  geomID = rayhit.hit.geomID;
+			Color4f frag = _ProcessRayHitResult(renderTarget, pbrRender, cGlobalBuffer, cBatchBuffer, cShadingBuffer, u, v, geomID, primID);
+			Color4B color(int(frag.x * 255), int(frag.y * 255), int(frag.z * 255), 255);
+			renderTarget->WritePixel(x, y, color.r, color.g, color.b);
 		}
 	}
 }
