@@ -328,6 +328,10 @@ namespace GLTFLoader
 			const tinygltf::Mesh& tMesh = tModel.meshes[tNode.mesh];
 			_LoadPrimitives(model, tModel, tMesh);
 		}
+		else
+		{
+			std::cout << "GLTFNode name=" << tNode.name << std::endl;
+		}
 
 		// Load children
 		for (const auto& idx : tNode.children)

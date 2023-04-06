@@ -72,3 +72,18 @@ protected:
 	uint32		  mChannels;
 	std::uint8_t* mData = nullptr;
 };
+
+class RxImageCube : public RxImage
+{
+public:
+	RxImageCube()
+	{
+	}
+	RxImageCube(const char* filename);
+
+	Color4f SamplePixel(Vector3f dir) const;
+
+
+protected:
+	TexturePtr mTextures[6];
+};

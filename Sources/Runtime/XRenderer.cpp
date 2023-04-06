@@ -12,6 +12,12 @@
 #include "Utils/FileSystem.h"
 #include "XRenderer.h"
 
+#include "ImGUI/backends/imgui_impl_glfw.h"
+
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
+
 class Shader
 {
 public:
@@ -132,6 +138,27 @@ void processInput(GLFWwindow* window);
 //const unsigned int SCR_WIDTH  = 800;
 //const unsigned int SCR_HEIGHT = 600;
 
+void processUI()
+{
+	// feed inputs to dear imgui, start new frame
+	ImGui_ImplOpenGL3_NewFrame();
+	ImGui_ImplGlfw_NewFrame();
+	ImGui::NewFrame();
+
+	ImGui::Begin("STEP files");
+
+	ImGui::Button("Add File");
+	ImGui::SameLine();
+	ImGui::Button("Clear List");
+	// ImGui::ListBox("Files",&currentItem,listboxItems,currentItemsCount,10);
+
+	ImGui::End();
+
+	// Rendering
+	ImGui::Render();
+	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+}
+
 int Renderer(const RxImage* renderTarget)
 {
 	const uint32 SCR_WIDTH	= renderTarget->GetWidth();
@@ -166,6 +193,13 @@ int Renderer(const RxImage* renderTarget)
 		std::cout << "Failed to initialize GLAD" << std::endl;
 		return -1;
 	}
+
+	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO();  
+	ImGui_ImplGlfw_InitForOpenGL(window, true);
+	ImGui_ImplOpenGL3_Init("#version 330");
+	//  Setup Dear ImGui style
+	ImGui::StyleColorsDark();
 
 	// build and compile our shader zprogram
 	// ------------------------------------
@@ -257,6 +291,8 @@ int Renderer(const RxImage* renderTarget)
 		ourShader.use();
 		glBindVertexArray(VAO);
 		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+		processUI();
 
 		// glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
 		// -------------------------------------------------------------------------------

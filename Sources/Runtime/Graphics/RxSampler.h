@@ -40,3 +40,9 @@ public:
 protected:
 	RxWrapMode mWrapModel;
 };
+
+Color4f texture2D(const RxImage* texture, Vector2f uv);
+
+Color4f textureCube(const RxImage* texture, Vector3f dir , int Lod = 0);
+
+Color4f textureCubeLod(const RxImage* texture, Vector3f dir, int Lod = 0);

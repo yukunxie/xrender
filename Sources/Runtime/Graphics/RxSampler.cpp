@@ -34,3 +34,19 @@ Color4f RxSampler::SamplePixel(const RxImage* image, float u, float v) const
 	Color3B color = image->SamplePixel(texCoord);
 	return (1.0f / 255) * Color4f(Color4B(color, 255));
 }
+
+Color4f texture2D(const RxImage* texture, Vector2f uv)
+{
+	static RxSampler* sampler = RxSampler::CreateSampler();
+	return sampler->SamplePixel(texture, uv);
+}
+
+Color4f textureCube(const RxImage* texture, Vector3f dir, int Lod)
+{
+	return ((RxImageCube*)texture)->SamplePixel(dir);
+}
+
+Color4f textureCubeLod(const RxImage* texture, Vector3f dir, int Lod)
+{
+	return textureCube(texture, dir, Lod);
+}

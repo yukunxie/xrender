@@ -22,6 +22,7 @@ public:
 	Renderer()
 	{
 		mBRDFTexture = std::make_shared< RxImage>("Engine/IBL_BRDF.png");
+		mEnvTexture	 = std::make_shared<RxImageCube>("SkyBox0");
 	}
 
 	virtual ~Renderer()
@@ -32,6 +33,7 @@ public:
 
 protected:
 	TexturePtr mBRDFTexture;
+	TexturePtr mEnvTexture;
 };
 
 

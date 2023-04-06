@@ -133,7 +133,9 @@ int height = 1024;
 int main()
 {
 	// auto k = GLTFLoader::LoadModelFromGLTF("Models/deer.gltf");
+	 //auto k = GLTFLoader::LoadModelFromGLTF("Models/color_teapot_spheres.gltf");
 	auto k = GLTFLoader::LoadModelFromGLTF("Scenes/Sponza/Sponza.gltf");
+	//auto k = GLTFLoader::LoadModelFromGLTF("Scenes/cornellbox/cornellBox-2.80-Eevee-gltf.gltf");
 	/*auto k = GLTFLoader::LoadModelFromGLTF("Models/DamagedHelmet/glTF-Embedded/DamagedHelmet.gltf");*/
 
 	RTCDevice device = rtcNewDevice("tri_accel=bvh4.triangle4v");

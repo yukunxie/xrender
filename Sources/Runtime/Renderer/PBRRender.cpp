@@ -2,6 +2,7 @@
 #include "PBRRender.h"
 #include "Graphics/RxSampler.h"
 #include <algorithm>
+#include "PBRShader.h"
 
 #define USE_ALITA_PBR 0
 
@@ -502,10 +503,15 @@ Color4f PBRRender::Render(const GlobalConstantBuffer& cGlobalBuffer, const Batch
 	auto matTexture = material->GetTexture("tMetallicRoughnessMap");
 
 	 static RxSampler* sampler = RxSampler::CreateSampler(RxSamplerType::Linear, RxWrapMode::Repeat);
-	Color4f			  _albedo = sampler->SamplePixel(texture.get(), uv.x, uv.y);
-	Color3f			  Albedo  = { _albedo.r, _albedo.g, _albedo.b };
 
-	return Color4f(Albedo, 1.0f);
+	 Color3f Albedo = Color3f{ 1.0f };
+	 if (texture)
+	 {
+		 Color4f _albedo = sampler->SamplePixel(texture.get(), uv.x, uv.y);
+		 Albedo	 = { _albedo.r, _albedo.g, _albedo.b };
+	 }
+
+	//return Color4f(Albedo, 1.0f);
 
 	// auto texture	 = material->GetTexture("tNormalMap");
 	Vector3f Normal	 = glm::normalize(normal);
@@ -535,6 +541,8 @@ Color4f PBRRender::Render(const GlobalConstantBuffer& cGlobalBuffer, const Batch
 
 	float Roughness = roughness;
 	float Metallic  = metallic;
+
+	return PBRShading(metallic, roughness, N, V, L, H, 1.0f, Albedo, mBRDFTexture.get(), (RxImageCube*)mEnvTexture.get());
 
 
 	//// ----- github glsl

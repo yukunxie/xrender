@@ -1,6 +1,8 @@
 #include "RxImage.h"
 
 #include <span>
+#include <string>
+using namespace std::string_literals;
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION 1
 #define STB_IMAGE_IMPLEMENTATION	   1
@@ -10,6 +12,15 @@
 
 #include "Utils/FileSystem.h"
 #include "Loader/ImageLoader.h"
+#include "RxSampler.h"
+
+static const std::vector<std::string> sImageExts = {
+	".jpg",
+	".png",
+	".tag",
+	".bmp",
+};
+
 
 RxImage::RxImage(const char* filename)
 {
@@ -117,4 +128,78 @@ std::shared_ptr<RxImage> RxImage::LoadTextureFromData(uint32 width, uint32 heigh
 std::shared_ptr<RxImage> RxImage::Create3DNoiseTexture()
 {
 	return (ImageLoader::Create3DFloatTexture(256, 256, 128));
+}
+
+RxImageCube::RxImageCube(const char* cubeTextureName)
+{
+	constexpr uint32 kFaceNum			  = 6;
+	const char*		 kFaceNames[kFaceNum] = { "px", "nx", "py", "ny", "pz", "nz" };
+	std::string		 fileExt			  = "";
+	for (const auto& ext : sImageExts)
+	{
+		std::string filename = "Textures\\CubeTextures\\"s + cubeTextureName + "\\"s + "nx"s + ext;
+		if (!FileSystem::GetInstance()->GetAbsFilePath(filename.c_str()).empty())
+		{
+			fileExt = ext;
+			break;
+		}
+	}
+
+	Assert(!fileExt.empty());
+
+	for (int face = 0; face < kFaceNum; ++face)
+	{
+		std::string	 filename = "Textures\\CubeTextures\\"s + cubeTextureName + "\\"s + kFaceNames[face] + fileExt;
+		mTextures[face]		 = std::make_shared<RxImage>(filename.c_str());
+	}
+}
+
+Color4f RxImageCube::SamplePixel(Vector3f TexCoords) const
+{
+	//dir = glm::normalize(dir);
+
+	/*const glm::vec3 FRONT  = glm::vec3(0.0f, 0.0f, 1.0f);
+	const glm::vec3 BACK   = glm::vec3(0.0f, 0.0f, -1.0f);
+	const glm::vec3 LEFT   = glm::vec3(-1.0f, 0.0f, 0.0f);
+	const glm::vec3 RIGHT  = glm::vec3(1.0f, 0.0f, 0.0f);
+	const glm::vec3 TOP	   = glm::vec3(0.0f, 1.0f, 0.0f);
+	const glm::vec3 BOTTOM = glm::vec3(0.0f, -1.0f, 0.0f);
+
+	float dotFront = glm::dot(dir, FRONT);
+	float angle	   = glm::acos(dotFront);
+
+	const int NUM_TEX  = 6;
+	int		  texIndex = static_cast<int>(angle / (glm::two_pi<float>() / NUM_TEX)) % NUM_TEX;*/
+
+	auto posx = mTextures[0];
+	auto negx = mTextures[1];
+
+	auto posy = mTextures[2];
+	auto negy = mTextures[3];
+
+	auto posz = mTextures[4];
+	auto negz = mTextures[5];
+
+	float mag = glm::max(glm::max(abs(TexCoords.x), abs(TexCoords.y)), abs(TexCoords.z));
+	if (mag == abs(TexCoords.x))
+	{
+		if (TexCoords.x > 0)
+			return texture2D(posx.get(), Vector2f((TexCoords.z + 1) / 2, (TexCoords.y + 1) / 2));
+		else if (TexCoords.x < 0)
+			return texture2D(negx.get(), Vector2f((TexCoords.z + 1) / 2, (TexCoords.y / mag + 1) / 2));
+	}
+	else if (mag == abs(TexCoords.y))
+	{
+		if (TexCoords.y > 0)
+			return texture2D(posy.get(), Vector2f((TexCoords.x + 1) / 2, (TexCoords.z + 1) / 2));
+		else if (TexCoords.y < 0)
+			return texture2D(negy.get(), Vector2f((TexCoords.x + 1) / 2, (TexCoords.z + 1) / 2));
+	}
+	else if (mag == abs(TexCoords.z))
+	{
+		if (TexCoords.z > 0)
+			return texture2D(posz.get(), Vector2f((TexCoords.x + 1) / 2, (TexCoords.y + 1) / 2));
+		else if (TexCoords.z < 0)
+			return texture2D(negz.get(), Vector2f((TexCoords.x + 1) / 2, (TexCoords.y + 1) / 2));
+	}
 }
