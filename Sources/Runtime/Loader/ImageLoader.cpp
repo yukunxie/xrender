@@ -160,7 +160,7 @@ namespace ImageLoader
 
     TexturePtr LoadTextureFromData(uint32 texWidth, uint32 texHeight, uint32 texChannels, const std::uint8_t* pixels, std::uint32_t byteLength, const std::string& debugName)
     {
-		return std::make_shared<RxImage>(texWidth, texHeight, texChannels, pixels);
+		return std::make_shared<PhysicalImage>(texWidth, texHeight, texChannels, pixels);
 
         //ImageData imageData;
         //{

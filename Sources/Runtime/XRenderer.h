@@ -2,4 +2,4 @@
 
 #include "Graphics/RxImage.h"
 
-int Renderer(const RxImage* renderTarget);
+int Renderer(const PhysicalImage* renderTarget);

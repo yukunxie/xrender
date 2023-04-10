@@ -128,6 +128,10 @@ typedef glm::vec2 Vector2f;
 typedef glm::vec3 Vector3f;
 typedef glm::vec4 Vector4f;
 
+typedef glm::vec2 vec2;
+typedef glm::vec3 vec3;
+typedef glm::vec4 vec4;
+
 typedef glm::vec2 Color2f;
 typedef glm::vec3 Color3f;
 typedef glm::vec4 Color4f;

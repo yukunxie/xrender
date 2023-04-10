@@ -31,10 +31,57 @@
 #include "Graphics/RxImage.h"
 #include "Graphics/RxSampler.h"
 #include "Object/MeshComponent.h"
+#include <glm/glm.hpp>
+#include <glm/geometric.hpp>  
 
 extern std::map<int, MeshComponent*> GMeshComponentProxies;
 
-static Color4f _ProcessRayHitResult(RxImage* renderTarget, PBRRender& pbrRender, const GlobalConstantBuffer& cGlobalBuffer, const BatchBuffer& cBatchBuffer, const ShadingBuffer& cShadingBuffer, float u, float v, int geomID, int primID)
+glm::vec3 triangleBitangent(const glm::vec3& v1, const glm::vec3& v2, const glm::vec3& v3, const glm::vec2& uv1, const glm::vec2& uv2, const glm::vec2& uv3)
+{
+	glm::vec3 edge1	   = v2 - v1;
+	glm::vec3 edge2	   = v3 - v1;
+	glm::vec2 deltaUV1 = uv2 - uv1;
+	glm::vec2 deltaUV2 = uv3 - uv1;
+
+	float f = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
+
+	glm::vec3 bitangent;
+	bitangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
+	bitangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
+	bitangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
+
+	return bitangent;
+}
+
+glm::vec3 triangleTangent(const glm::vec3& v1, const glm::vec3& v2, const glm::vec3& v3, const glm::vec2& uv1, const glm::vec2& uv2, const glm::vec2& uv3)
+{
+	glm::vec3 edge1	   = v2 - v1;
+	glm::vec3 edge2	   = v3 - v1;
+	glm::vec2 deltaUV1 = uv2 - uv1;
+	glm::vec2 deltaUV2 = uv3 - uv1;
+
+	float f = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
+
+	glm::vec3 tangent;
+	tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
+	tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
+	tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
+
+	return tangent;
+}
+
+Vector3f interpolateNormal(float u, float v, Vector3f p0, Vector3f p1, Vector3f p2, Vector3f n0, Vector3f n1, Vector3f n2)
+{
+	glm::vec3 p = (1 - u - v) * p0 + u * p1 + v * p2;
+	glm::vec3 tangent0, bitangent0, tangent1, bitangent1, tangent2, bitangent2;
+	//glm::triangleTangent(p0, p1, p2, tangent0, bitangent0);
+	//glm::triangleTangent(p1, p2, p0, tangent1, bitangent1);
+	//glm::triangleTangent(p2, p0, p1, tangent2, bitangent2);
+
+	return {};
+}
+
+static Color4f _ProcessRayHitResult(PhysicalImage* renderTarget, PBRRender& pbrRender, const GlobalConstantBuffer& cGlobalBuffer, const BatchBuffer& cBatchBuffer, const ShadingBuffer& cShadingBuffer, float u, float v, int geomID, int primID)
 {
 	if (geomID != RTC_INVALID_GEOMETRY_ID)
 	{
@@ -55,13 +102,37 @@ static Color4f _ProcessRayHitResult(RxImage* renderTarget, PBRRender& pbrRender,
 		Vector3f p1 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::POSITION, v1);
 		Vector3f p2 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::POSITION, v2);
 
+		Vector3f t0 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::TANGENT, v0);
+		Vector3f t1 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::TANGENT, v1);
+		Vector3f t2 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::TANGENT, v2);
+
+		Vector3f b0 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::BITANGENT, v0);
+		Vector3f b1 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::BITANGENT, v1);
+		Vector3f b2 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::BITANGENT, v2);
+
+
+#if 0
 		Vector2f uv		= uv0 * u + uv1 * v + uv2 * (1.0f - u - v);
-		Vector3f normal = n0 * u + n1 * v + n2 * (1.0f - u - v);
+		Vector3f normal = glm::normalize(n0) * u + glm::normalize(n1) * v + glm::normalize(n2) * (1.0f - u - v);
 		Vector3f pos	= p0 + u * (p1 - p0) + v * (p2 - p0);
+#else
+		Vector2f uv		= (1.0f - u - v) * uv0  + uv1 * u + uv2 *v;
+		Vector3f normal = (1.0f - u - v) * glm::normalize(n0)  + glm::normalize(n1) * u + glm::normalize(n2)*v;
+		Vector3f pos	= (1.0f - u - v) * p0 + u * p1  + v * p2;
+#endif
+
+		normal = glm::normalize(normal);
+
+		Vector3f T = (1.0f - u - v)* t0  + t1 * u + t2 * v;
+		Vector3f B = (1.0f - u - v)* b0  + b1 * u + b2 * v;
+
+		glm::mat3 tbnMatrix = glm::mat3(T, B, normal);
+		glm::mat3 invTBNMatrix = glm::inverse(tbnMatrix);
+		glm::mat3 normalMatrix = glm::transpose(invTBNMatrix);
 
 		auto material = meshProxy->GetMaterial();
 
-		Color4f frag = pbrRender.Render(cGlobalBuffer, cBatchBuffer, cShadingBuffer, pos, normal, uv, material);
+		Color4f frag = pbrRender.Render(cGlobalBuffer, cBatchBuffer, cShadingBuffer, pos, normal, uv, normalMatrix, material);
 
 		return frag;
 	}
@@ -71,7 +142,7 @@ static Color4f _ProcessRayHitResult(RxImage* renderTarget, PBRRender& pbrRender,
 	}
 }
 
-void RTRender(Vector3f pos, Vector3f foucs, Vector3f up, RxImage* renderTarget, RTCScene scene, PBRRender& pbrRender)
+void RTRender(Vector3f pos, Vector3f foucs, Vector3f up, PhysicalImage* renderTarget, RTCScene scene, PBRRender& pbrRender)
 {
 	SCOPED_PROFILING_GUARD("RayTracingRender");
 	int		 width	= renderTarget->GetWidth();
@@ -95,7 +166,7 @@ void RTRender(Vector3f pos, Vector3f foucs, Vector3f up, RxImage* renderTarget, 
 		cGlobalBuffer.EyePos		= Vector4f(pos.x, pos.y, pos.z, 1.0f);
 		cGlobalBuffer.SunLight		= Vector4f(-10.0f, -10.0f, -10.0f, 0.0f);
 		cGlobalBuffer.SunLightColor = Vector4f(1.0f, 1.0f, 1.0f, 1.0f);
-		cGlobalBuffer.ViewMatrix;
+		cGlobalBuffer.ViewMatrix	= glm::lookAtLH(pos, foucs, up);
 		cGlobalBuffer.ProjMatrix;
 	}
 
@@ -175,38 +246,8 @@ void RTRender(Vector3f pos, Vector3f foucs, Vector3f up, RxImage* renderTarget, 
 				int		primID = RTC_ARRAY_PREFIX(rayhits.hit.primID)[i];
 				int		geomID = RTC_ARRAY_PREFIX(rayhits.hit.geomID)[i];
 				Color4f frag   = _ProcessRayHitResult(renderTarget, pbrRender, cGlobalBuffer, cBatchBuffer, cShadingBuffer, u, v, geomID, primID);
-				Color4B color(int(frag.x * 255), int(frag.y * 255), int(frag.z * 255), 255);
-				renderTarget->WritePixel(x, y, color.r, color.g, color.b);
+				renderTarget->WritePixel(x, y, frag);
 			}
-
-			//auto	  dir = embree::Vec3fa(embree::normalize(x * ispcCamera.xfm.l.vx + y * ispcCamera.xfm.l.vy + ispcCamera.xfm.l.vz));
-			/*RTCRayHit rayhit;
-
-			rayhit.ray.org_x  = ispcCamera.xfm.p.x;
-			rayhit.ray.org_y  = ispcCamera.xfm.p.y;
-			rayhit.ray.org_z  = ispcCamera.xfm.p.z;
-			rayhit.ray.dir_x  = dir.x;
-			rayhit.ray.dir_y  = dir.y;
-			rayhit.ray.dir_z  = dir.z;
-			rayhit.ray.tnear  = 0.f;
-			rayhit.ray.tfar	  = 2000;
-			rayhit.ray.time	  = 1;
-			rayhit.ray.mask	  = 0xFFFFFFFF;
-			rayhit.hit.geomID = RTC_INVALID_GEOMETRY_ID;
-			rtcIntersect1(scene, &rayhit);
-			*/
-
-			
-
-			
-
-			/*float u		 = rayhit.hit.u;
-			float v		 = rayhit.hit.v;
-			int	  primID = rayhit.hit.primID;
-			int	  geomID = rayhit.hit.geomID;
-			Color4f frag = _ProcessRayHitResult(renderTarget, pbrRender, cGlobalBuffer, cBatchBuffer, cShadingBuffer, u, v, geomID, primID);
-			Color4B color(int(frag.x * 255), int(frag.y * 255), int(frag.z * 255), 255);
-			renderTarget->WritePixel(x, y, color.r, color.g, color.b);*/
 		}
 	}
 }

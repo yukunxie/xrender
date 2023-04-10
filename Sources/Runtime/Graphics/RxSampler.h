@@ -30,19 +30,19 @@ public:
 
 public:
 	// default linear
-	virtual Color4f SamplePixel(const RxImage* image, float u, float v) const;
+	virtual Color4f ReadPixel(const PhysicalImage* image, float u, float v) const;
 
-	virtual Color4f SamplePixel(const RxImage* image, Vector2f uv) const
+	virtual Color4f ReadPixel(const PhysicalImage* image, Vector2f uv) const
 	{
-		return SamplePixel(image, uv.x, uv.y);
+		return ReadPixel(image, uv.x, uv.y);
 	}
 
 protected:
 	RxWrapMode mWrapModel;
 };
 
-Color4f texture2D(const RxImage* texture, Vector2f uv);
+Color4f texture2D(const PhysicalImage* texture, Vector2f uv);
 
-Color4f textureCube(const RxImage* texture, Vector3f dir , int Lod = 0);
+Color4f textureCube(const PhysicalImage* texture, Vector3f dir , int Lod = 0);
 
-Color4f textureCubeLod(const RxImage* texture, Vector3f dir, int Lod = 0);
+Color4f textureCubeLod(const PhysicalImage* texture, Vector3f dir, int Lod = 0);

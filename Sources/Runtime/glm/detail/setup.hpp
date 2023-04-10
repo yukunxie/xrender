@@ -489,6 +489,7 @@
 #define GLM_SWIZZLE_DISABLED		0
 #define GLM_SWIZZLE_OPERATOR		1
 #define GLM_SWIZZLE_FUNCTION		2
+#define GLM_FORCE_SWIZZLE
 
 #if defined(GLM_SWIZZLE)
 #	pragma message("GLM: GLM_SWIZZLE is deprecated, use GLM_FORCE_SWIZZLE instead.")

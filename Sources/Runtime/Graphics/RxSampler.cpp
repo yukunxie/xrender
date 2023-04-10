@@ -20,7 +20,7 @@ Vector2I GetWrappedWithRepeat(Vector2I pos, Extent2D size)
 	return { pos.x % size.x, pos.y % size.y };
 }
 
-Color4f RxSampler::SamplePixel(const RxImage* image, float u, float v) const
+Color4f RxSampler::ReadPixel(const PhysicalImage* image, float u, float v) const
 {
 	int	  w	 = image->GetWidth();
 	int	  h	 = image->GetHeight();
@@ -31,22 +31,22 @@ Color4f RxSampler::SamplePixel(const RxImage* image, float u, float v) const
 
 	Vector2I texCoord = GetWrappedWithRepeat({ pw, ph }, { w, h });
 
-	Color3B color = image->SamplePixel(texCoord);
-	return (1.0f / 255) * Color4f(Color4B(color, 255));
+	Color4f color = image->ReadPixel(texCoord.x, texCoord.y);
+	return color;
 }
 
-Color4f texture2D(const RxImage* texture, Vector2f uv)
+Color4f texture2D(const PhysicalImage* texture, Vector2f uv)
 {
 	static RxSampler* sampler = RxSampler::CreateSampler();
-	return sampler->SamplePixel(texture, uv);
+	return sampler->ReadPixel(texture, uv);
 }
 
-Color4f textureCube(const RxImage* texture, Vector3f dir, int Lod)
+Color4f textureCube(const PhysicalImage* texture, Vector3f dir, int Lod)
 {
-	return ((RxImageCube*)texture)->SamplePixel(dir);
+	return ((RxImageCube*)texture)->ReadPixel(dir);
 }
 
-Color4f textureCubeLod(const RxImage* texture, Vector3f dir, int Lod)
+Color4f textureCubeLod(const PhysicalImage* texture, Vector3f dir, int Lod)
 {
 	return textureCube(texture, dir, Lod);
 }

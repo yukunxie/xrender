@@ -3,67 +3,9 @@
 
 #include <algorithm>
 
-
-#define PI		3.1415926535897932384626433832795f
-#define Epsilon 0.00001f
+#include "ShadingBase.h"
 
 #define COOK_GGX
-
-template<class T>
-constexpr T pow2(T x)
-{
-	return x * x;
-}
-
-template<typename T1, typename T2>
-T1 mix(T1 a, T1 b, T2 c)
-{
-	return glm::mix(a, b, c);
-}
-
-template<typename T1, typename T2>
-T1 clamp(T1 a, T2 b, T2 c)
-{
-	return glm::clamp(a, b, c);
-}
-
-template<typename T1>
-T1 max(T1 a, T1 b)
-{
-	return glm::max(a, b);
-}
-
-template<typename T1>
-T1 min(T1 a, T1 b)
-{
-	return glm::min(a, b);
-}
-
-template<class T>
-constexpr size_t nextPowerOfTwo(T i)
-{
-	// Equivalent to 2^ceil(log2(i))
-	return i == 0 ? 0 : 1ull << (sizeof(T) * 8 - std::countl_zero(i - 1));
-}
-
-
-template<class T>
-constexpr T cmax(T x, T y)
-{
-	return x > y ? x : y;
-}
-
-typedef Vector2f vec2;
-typedef Vector3f vec3;
-typedef Vector4f vec4;
-
-
-// handy value clamping to 0 - 1 range
-float saturate(float value)
-{
-	return clamp(value, 0.0f, 1.0f);
-}
-
 
 // phong (lambertian) diffuse term
 float phong_diffuse()
@@ -71,14 +13,12 @@ float phong_diffuse()
 	return (1.0f / PI);
 }
 
-
 // compute fresnel specular factor for given base specular and product
 // product could be NdV or VdH depending on used technique
 vec3 fresnel_factor(vec3 f0, float product)
 {
 	return mix(f0, vec3(1.0f), pow(1.01f - product, 5.0f));
 }
-
 
 // following functions are copies of UE4
 // for computing cook-torrance specular lighting terms
@@ -98,23 +38,6 @@ float D_beckmann(float roughness, float NdH)
 	float NdH2 = NdH * NdH;
 	return exp((NdH2 - 1.0f) / (m2 * NdH2)) / (PI * m2 * NdH2 * NdH2);
 }
-
-float D_GGX2(float roughness, float NdH)
-{
-	float m	 = roughness * roughness;
-	float m2 = m * m;
-	float d	 = (NdH * m2 - NdH) * NdH + 1.0f;
-	return m2 / (PI * d * d);
-}
-
-float G_schlick(float roughness, float NdV, float NdL)
-{
-	float k = roughness * roughness * 0.5f;
-	float V = NdV * (1.0f - k) + k;
-	float L = NdL * (1.0f - k) + k;
-	return 0.25f / (V * L);
-}
-
 
 // simple phong specular calculation with normalization
 vec3 phong_specular(vec3 V, vec3 L, vec3 N, vec3 specular, float roughness)
@@ -159,7 +82,7 @@ vec3 cooktorrance_specular(float NdL, float NdV, float NdH, vec3 specular, float
 
 // https://gist.github.com/galek/53557375251e1a942dfa
 // A: light attenuation
-Color4f PBRShading(float metallic, float roughness, Vector3f N, Vector3f V, Vector3f L, Vector3f H, float A, Vector3f Albedo, RxImage* BRDFTexture, const RxImageCube* EnvTexture)
+Color4f PBRShading(float metallic, float roughness, const TMat3x3& normalMatrix, Vector3f N, Vector3f V, Vector3f L, Vector3f H, float A, Vector3f Albedo, PhysicalImage* BRDFTexture, const RxImageCube* EnvTexture)
 {
 	//// point light direction to point in view space
 	//vec3 local_light_pos = (view_matrix * (/*world_matrix */ light_pos)).xyz;
@@ -219,7 +142,7 @@ Color4f PBRShading(float metallic, float roughness, Vector3f N, Vector3f V, Vect
 	//// specular IBL term
 	////    11 magic number is total MIP levels in cubemap, this is simplest way for picking
 	////    MIP level from roughness value (but it's not correct, however it looks fine)
-	vec3 refl	 = /*tnrm **/ reflect(-V, N);
+	vec3 refl	 = normalMatrix * reflect(V, N);
 	/*vec3 envspec = textureCubeLod(
 				   EnvTexture, refl, max(roughness * 11.0f, textureQueryLod(envd, refl).y))
 				   .xyz;*/
@@ -284,5 +207,159 @@ Color4f PBRShading(float metallic, float roughness, Vector3f N, Vector3f V, Vect
 	diffuse_light * mix(base, vec3(0.0), metallic) +
 	reflected_light;
 
-	return vec4(result, 1);
+#if 0
+	return vec4(0.5f * (nn + 1.0f), 1);
+#else
+	return vec4(envdiff, 1);
+#endif
+	
+}
+
+static glm::vec3 lightPositions[] = {
+	glm::vec3(-10.0f, 10.0f, 10.0f),
+	glm::vec3(10.0f, 10.0f, 10.0f),
+	glm::vec3(-10.0f, -10.0f, 10.0f),
+	glm::vec3(10.0f, -10.0f, 10.0f),
+};
+static glm::vec3 lightColors[] = {
+	glm::vec3(300.0f, 300.0f, 300.0f),
+	glm::vec3(300.0f, 300.0f, 300.0f),
+	glm::vec3(300.0f, 300.0f, 300.0f),
+	glm::vec3(300.0f, 300.0f, 300.0f)
+};
+
+
+// ----------------------------------------------------------------------------
+float DistributionGGX(vec3 N, vec3 H, float roughness)
+{
+	float a		 = roughness * roughness;
+	float a2	 = a * a;
+	float NdotH	 = max(dot(N, H), 0.0f);
+	float NdotH2 = NdotH * NdotH;
+
+	float nom	= a2;
+	float denom = (NdotH2 * (a2 - 1.0) + 1.0f);
+	denom		= PI * denom * denom;
+
+	return nom / denom;
+}
+// ----------------------------------------------------------------------------
+float GeometrySchlickGGX(float NdotV, float roughness)
+{
+	float r = (roughness + 1.0f);
+	float k = (r * r) / 8.0f;
+
+	float nom	= NdotV;
+	float denom = NdotV * (1.0f - k) + k;
+
+	return nom / denom;
+}
+// ----------------------------------------------------------------------------
+float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
+{
+	float NdotV = max(dot(N, V), 0.0f);
+	float NdotL = max(dot(N, L), 0.0f);
+	float ggx2	= GeometrySchlickGGX(NdotV, roughness);
+	float ggx1	= GeometrySchlickGGX(NdotL, roughness);
+
+	return ggx1 * ggx2;
+}
+// ----------------------------------------------------------------------------
+vec3 fresnelSchlick(float cosTheta, vec3 F0)
+{
+	return F0 + (1.0f - F0) * pow(clamp(1.0f - cosTheta, 0.0f, 1.0f), 5.0f);
+}
+// ----------------------------------------------------------------------------
+vec3 fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness)
+{
+	return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0f - cosTheta, 0.0f, 1.0f), 5.0f);
+}   
+
+// https://learnopengl.com/PBR/Lighting
+// https://learnopengl.com/code_viewer_gh.php?code=src/6.pbr/1.1.lighting/1.1.pbr.fs
+Color4f PBRShading(const GlobalConstantBuffer& cGlobalBuffer, const GBufferData& gBufferData, PhysicalImage* BRDFTexture, const RxImageCube* EnvTexture)
+{
+	vec3  N			= normalize(gBufferData.WorldNormal);
+	vec3  V			= normalize(cGlobalBuffer.EyePos.xyz - gBufferData.Position);
+	vec3  albedo	= gBufferData.Albedo;
+	float metallic	= gBufferData.Material.r;
+	float roughness = gBufferData.Material.g;
+	vec3  ao		= vec3(1.0f);
+	vec4  FragColor(0, 0, 0, 1);
+
+	// calculate reflectance at normal incidence; if dia-electric (like plastic) use F0
+	// of 0.04 and if it's a metal, use the albedo color as F0 (metallic workflow)
+	vec3 F0 = vec3(0.04);
+	F0		= mix(F0, albedo, metallic);
+
+	vec3 WorldPos = gBufferData.Position;
+
+	// reflectance equation
+	vec3 Lo = vec3(0.0);
+	for (int i = 0; i < 4; ++i)
+	{
+		// calculate per-light radiance
+		vec3  L			  = normalize(lightPositions[i] - WorldPos);
+		vec3  H			  = normalize(V + L);
+		float distance	  = length(lightPositions[i] - WorldPos);
+		float attenuation = 1.0 / (distance * distance);
+		vec3  radiance	  = lightColors[i] * attenuation;
+
+		// Cook-Torrance BRDF
+		float NDF = DistributionGGX(N, H, roughness);
+		float G	  = GeometrySmith(N, V, L, roughness);
+		vec3  F	  = fresnelSchlick(clamp(dot(H, V), 0.0f, 1.0f), F0);
+
+		vec3  numerator	  = NDF * G * F;
+		float denominator = 4.0f * max(dot(N, V), 0.0f) * max(dot(N, L), 0.0f) + 0.0001f; // + 0.0001 to prevent divide by zero
+		vec3  specular	  = numerator / denominator;
+
+		// kS is equal to Fresnel
+		vec3 kS = F;
+		// for energy conservation, the diffuse and specular light can't
+		// be above 1.0 (unless the surface emits light); to preserve this
+		// relationship the diffuse component (kD) should equal 1.0 - kS.
+		vec3 kD = vec3(1.0) - kS;
+		// multiply kD by the inverse metalness such that only non-metals
+		// have diffuse lighting, or a linear blend if partly metal (pure metals
+		// have no diffuse light).
+		kD *= 1.0 - metallic;
+
+		// scale light by NdotL
+		float NdotL = max(dot(N, L), 0.0f);
+
+		// add to outgoing radiance Lo
+		Lo += (kD * albedo / PI + specular) * radiance * NdotL; // note that we already multiplied the BRDF by the Fresnel (kS) so we won't multiply by kS again
+	} 
+
+	//// ambient lighting (we now use IBL as the ambient term)
+	//vec3 F = fresnelSchlickRoughness(max(dot(N, V), 0.0f), F0, roughness);
+
+	//vec3 kS = F;
+	//vec3 kD = 1.0f - kS;
+	//kD *= 1.0f - metallic;
+
+	//vec3 irradiance = textureCube(irradianceMap, N).rgb;
+	//vec3 diffuse	= irradiance * albedo;
+
+	//// sample both the pre-filter map and the BRDF lut and combine them together as per the Split-Sum approximation to get the IBL specular part.
+	//const float MAX_REFLECTION_LOD = 4.0;
+	//vec3		prefilteredColor   = textureLod(prefilterMap, R, roughness * MAX_REFLECTION_LOD).rgb;
+	//vec2		brdf			   = texture(brdfLUT, vec2(max(dot(N, V), 0.0), roughness)).rg;
+	//vec3		specular		   = prefilteredColor * (F * brdf.x + brdf.y);
+
+	//vec3 ambient = (kD * diffuse + specular) * ao;
+
+	//vec3 color = ambient + Lo;
+
+	//// HDR tonemapping
+	//color = color / (color + vec3(1.0));
+	//// gamma correct
+	//color = pow(color, vec3(1.0 / 2.2));
+
+	//FragColor = vec4(color, 1.0);
+	//return FragColor;
+
+
+	return vec4(0.5f * (gBufferData.WorldNormal + 1.0f), 1);
 }

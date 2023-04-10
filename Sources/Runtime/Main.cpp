@@ -28,6 +28,7 @@
 #include "MeshProxy.h"
 #include "Graphics/RxImage.h"
 #include "Graphics/RxSampler.h"
+#include "Graphics/Prefilter.h"
 #include "Object/MeshComponent.h"
 
 #include "Loader/GLTFLoader.h"
@@ -134,9 +135,9 @@ int main()
 {
 	// auto k = GLTFLoader::LoadModelFromGLTF("Models/deer.gltf");
 	 //auto k = GLTFLoader::LoadModelFromGLTF("Models/color_teapot_spheres.gltf");
-	auto k = GLTFLoader::LoadModelFromGLTF("Scenes/Sponza/Sponza.gltf");
+	//auto k = GLTFLoader::LoadModelFromGLTF("Scenes/Sponza/Sponza.gltf");
 	//auto k = GLTFLoader::LoadModelFromGLTF("Scenes/cornellbox/cornellBox-2.80-Eevee-gltf.gltf");
-	/*auto k = GLTFLoader::LoadModelFromGLTF("Models/DamagedHelmet/glTF-Embedded/DamagedHelmet.gltf");*/
+	auto k = GLTFLoader::LoadModelFromGLTF("Models/DamagedHelmet/glTF-Embedded/DamagedHelmet.gltf");
 
 	RTCDevice device = rtcNewDevice("tri_accel=bvh4.triangle4v");
 
@@ -148,6 +149,10 @@ int main()
 	RTCScene scene = rtcNewScene(device);
 
 	AddEntityToEmbreeScene(device, scene, k);
+
+	PhysicalImage32F image("Textures/hdr/newport_loft.hdr");
+	PrefilterEnvironmentTexture(image);
+
 
 	// addHair(device, scene);
 
@@ -194,7 +199,7 @@ int main()
 	// print_bvh(scene);
 
 	int		channels_num = 4;
-	RxImage renderImage(width, height, channels_num);
+	PhysicalImage renderImage(width, height, channels_num);
 
 	auto sampler = RxSampler::CreateSampler();
 

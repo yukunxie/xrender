@@ -159,7 +159,7 @@ void processUI()
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
-int Renderer(const RxImage* renderTarget)
+int Renderer(const PhysicalImage* renderTarget)
 {
 	const uint32 SCR_WIDTH	= renderTarget->GetWidth();
 	const uint32 SCR_HEIGHT = renderTarget->GetHeight();

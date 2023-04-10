@@ -21,7 +21,7 @@ class Renderer
 public:
 	Renderer()
 	{
-		mBRDFTexture = std::make_shared< RxImage>("Engine/IBL_BRDF.png");
+		mBRDFTexture = std::make_shared< PhysicalImage>("Engine/IBL_BRDF.png");
 		mEnvTexture	 = std::make_shared<RxImageCube>("SkyBox0");
 	}
 
@@ -29,7 +29,7 @@ public:
 	{
 	}
 
-	virtual Color4f Render(const GlobalConstantBuffer& cGlobalBuffer, const BatchBuffer& cBatchBuffer, const ShadingBuffer& cShadingBuffer, Vector3f pos, Vector3f normal, Vector2f uv, const Material* material) noexcept = 0;
+	virtual Color4f Render(const GlobalConstantBuffer& cGlobalBuffer, const BatchBuffer& cBatchBuffer, const ShadingBuffer& cShadingBuffer, Vector3f pos, Vector3f normal, Vector2f uv, const TMat3x3& normalMatrix, const Material* material) noexcept = 0;
 
 protected:
 	TexturePtr mBRDFTexture;
@@ -40,5 +40,5 @@ protected:
 class PBRRender: public Renderer
 {
 public:
-	virtual Color4f Render(const GlobalConstantBuffer& cGlobalBuffer, const BatchBuffer& cBatchBuffer, const ShadingBuffer& cShadingBuffer, Vector3f pos, Vector3f normal, Vector2f uv, const Material* material) noexcept override;
+	virtual Color4f Render(const GlobalConstantBuffer& cGlobalBuffer, const BatchBuffer& cBatchBuffer, const ShadingBuffer& cShadingBuffer, Vector3f pos, Vector3f normal, Vector2f uv, const TMat3x3& normalMatrix, const Material* material) noexcept override;
 };

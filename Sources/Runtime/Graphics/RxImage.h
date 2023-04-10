@@ -3,20 +3,38 @@
 
 #include "Types.h"
 
-class RxImage;
+class PhysicalImage;
 
-typedef std::shared_ptr<RxImage> TexturePtr;
+typedef std::shared_ptr<PhysicalImage> TexturePtr;
 
-class RxImage
+class PhysicalImage
 {
+protected:
+	PhysicalImage()
+	{
+	}
+
+	virtual PhysicalImage* Clone(uint32 width, uint32 height, uint32 channels) const
+	{
+		return new PhysicalImage(width, height, channels, nullptr);
+	}
+
 public:
-	RxImage(){};
+	PhysicalImage(uint32 width, uint32 height, uint32 channels, uint32 channelSize)
+		: mWidth(width)
+		, mHeight(height)
+		, mChannels(channels)
+	{
+		size_t size = channelSize * width * height * channels;
+		mData		= (uint8*)malloc(size);
+		memset(mData, 0, size);
+	};
 
-	RxImage(const char* filename);
+	PhysicalImage(const char* filename);
 
-	RxImage(uint32 width, uint32 height, uint32 channels, const uint8* data = nullptr);
+	PhysicalImage(uint32 width, uint32 height, uint32 channels, const uint8* data = nullptr);
 
-	~RxImage()
+	virtual ~PhysicalImage()
 	{
 		if (mData)
 		{
@@ -24,17 +42,11 @@ public:
 		}
 	}
 
-	Color4B SamplePixel(float u, float v) const;
-		 
-	Color4B SamplePixel(uint32 x, uint32 y) const;
-		 
-	Color4B SamplePixel(Vector2I xy) const;
+	virtual Color4f ReadPixel(int x, int y) const;
 
-	void WritePixel(int x, int y, std::uint8_t r, std::uint8_t g, std::uint8_t b);
+	virtual void WritePixel(int w, int h, Color4f color);
 
-	void WritePixel(int x, int y, std::uint8_t r, std::uint8_t g, std::uint8_t b, std::uint8_t a);
-
-	void SaveToFile(const char* filename);
+	virtual void SaveToFile(const char* filename);
 
 	int GetWidth() const
 	{
@@ -56,15 +68,17 @@ public:
 		return mData;
 	}
 
-	static std::shared_ptr<RxImage> LoadTextureFromUri(const std::string& filename);
+	static std::shared_ptr<PhysicalImage> LoadTextureFromUri(const std::string& filename);
 
-	static std::shared_ptr<RxImage> LoadCubeTexture(const std::string& cubeTextureName);
+	static std::shared_ptr<PhysicalImage> LoadCubeTexture(const std::string& cubeTextureName);
 
-	static std::shared_ptr<RxImage> LoadTextureFromData(const std::uint8_t* data, std::uint32_t byteLength, const std::string& debugName = "");
+	static std::shared_ptr<PhysicalImage> LoadTextureFromData(const std::uint8_t* data, std::uint32_t byteLength, const std::string& debugName = "");
 
-	static std::shared_ptr<RxImage> LoadTextureFromData(uint32 width, uint32 height, uint32 component, const uint8* data, uint32 byteLength, const std::string& debugName = "");
+	static std::shared_ptr<PhysicalImage> LoadTextureFromData(uint32 width, uint32 height, uint32 component, const uint8* data, uint32 byteLength, const std::string& debugName = "");
 
-	static std::shared_ptr<RxImage> Create3DNoiseTexture();
+	static std::shared_ptr<PhysicalImage> Create3DNoiseTexture();
+
+	virtual PhysicalImage* DownSample() const;
 
 protected:
 	uint32		  mWidth;
@@ -73,15 +87,40 @@ protected:
 	std::uint8_t* mData = nullptr;
 };
 
-class RxImageCube : public RxImage
+class PhysicalImage32F : public PhysicalImage
 {
 public:
-	RxImageCube()
+	PhysicalImage32F(const char* hdrFilename);
+
+	PhysicalImage32F(uint32 width, uint32 height, uint32 channels, const float* data = nullptr);
+
+	virtual PhysicalImage* Clone(uint32 width, uint32 height, uint32 channels) const override
 	{
+		return new PhysicalImage32F(width, height, channels, nullptr);
 	}
+
+	virtual Color4f ReadPixel(int w, int h) const;
+
+	virtual void WritePixel(int w, int h, Color4f color) override;
+
+	virtual void SaveToFile(const char* filename) override;
+};
+
+class RxImageCube : public PhysicalImage
+{
+public:
+	/*RxImageCube()
+	{
+	}*/
 	RxImageCube(const char* filename);
 
-	Color4f SamplePixel(Vector3f dir) const;
+	virtual PhysicalImage* Clone(uint32 width, uint32 height, uint32 channels) const override
+	{
+		Assert(false);
+		return nullptr;
+	}
+
+	Color4f ReadPixel(Vector3f dir) const;
 
 
 protected:
