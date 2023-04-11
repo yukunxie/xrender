@@ -198,6 +198,8 @@ enum class TextureFormat
 	RG16UINT,
 	RG16SINT,
 	RG16FLOAT,
+	RGB8UNORM,
+	RGB8UNORM_SRGB,
 	RGBA8UNORM,
 	RGBA8UNORM_SRGB,
 	RGBA8SNORM,
@@ -222,6 +224,7 @@ enum class TextureFormat
 	RGBA32UINT,
 	RGBA32SINT,
 	RGBA32FLOAT,
+	RGB32FLOAT,
 
 	// Depth and stencil formats
 	DEPTH32FLOAT,

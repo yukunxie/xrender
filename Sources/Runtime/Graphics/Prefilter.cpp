@@ -29,6 +29,7 @@
 #include "MeshProxy.h"
 #include "Graphics/RxImage.h"
 #include "Graphics/RxSampler.h"
+#include "Texture.h"
 #include "Object/MeshComponent.h"
 #include <glm/glm.hpp>
 #include <glm/geometric.hpp>
@@ -120,10 +121,8 @@ static unsigned int AddPrefilterCube(RTCDevice device_i, RTCScene scene_i)
 void PrefilterEnvironmentTexture(PhysicalImage32F& evnImage)
 {
 	SCOPED_PROFILING_GUARD("PrefilterEnvironmentTexture");
-	int width = 1024;
-	// renderTarget->GetWidth();
-	int height = 1024;
-	// renderTarget->GetHeight();
+	int width  = 512;
+	int height = 512;
 
 	RTCDevice device = rtcNewDevice("tri_accel=bvh4.triangle4v");
 
@@ -158,11 +157,13 @@ void PrefilterEnvironmentTexture(PhysicalImage32F& evnImage)
 
 	RxSampler* sampler = RxSampler::CreateSampler();
 
+	auto* cube = new TextureCube(width, height, TextureFormat::RGBA32FLOAT, nullptr);
+
 	constexpr int NUM_CORE = 6;
-//#pragma omp parallel for num_threads(NUM_CORE)
-	for (int i = 0; i < 6; i++)
+#pragma omp parallel for num_threads(NUM_CORE)
+	for (int face = 0; face < 6; face++)
 	{
-		const auto&	   config = cameras[i];
+		const auto&	   config = cameras[face];
 		embree::Camera camera;
 		camera.from					  = embree::Vec3fa(config.From.x, config.From.y, config.From.z);
 		camera.to					  = embree::Vec3fa(config.Center.x, config.Center.y, config.Center.z);
@@ -170,9 +171,6 @@ void PrefilterEnvironmentTexture(PhysicalImage32F& evnImage)
 		camera.fov					  = 90;
 		camera.handedness			  = embree::Camera::Handedness::RIGHT_HANDED;
 		embree::ISPCCamera ispcCamera = camera.getISPCCamera(width, height);
-
-		int		channels_num = 4;
-		PhysicalImage32F renderImage(width, height, channels_num);
 
 		for (int y = 0; y < height; ++y)
 		{
@@ -198,30 +196,19 @@ void PrefilterEnvironmentTexture(PhysicalImage32F& evnImage)
 
 				Assert(rayhits.hit.geomID != RTC_INVALID_GEOMETRY_ID);
 
-				int		 primId = rayhits.hit.primID;
-				Vector3f p0		= GUniformCubeVertices[primId * 3 + 0];
-				Vector3f p1		= GUniformCubeVertices[primId * 3 + 1];
-				Vector3f p2		= GUniformCubeVertices[primId * 3 + 2];
+				int	 primId = rayhits.hit.primID;
+				vec3 p0		= GUniformCubeVertices[primId * 3 + 0];
+				vec3 p1		= GUniformCubeVertices[primId * 3 + 1];
+				vec3 p2		= GUniformCubeVertices[primId * 3 + 2];
 
-				vec3 pos = p0 + rayhits.hit.u * (p1 - p0) + rayhits.hit.v * (p2 - p0);
-
-				//_SampleSphericalMap
-				pos		= glm::normalize(pos);
-				vec2 uv = vec2(glm::atan(pos.z, pos.x), glm::asin(pos.y));
-				uv *= invAtan;
-				uv += 0.5;
-
+				vec3	pos	  = p0 + rayhits.hit.u * (p1 - p0) + rayhits.hit.v * (p2 - p0);
+				vec2	uv	  = _SampleSphericalMap(glm::normalize(pos));
 				Color4f color = texture2D(&evnImage, uv);
-				/*Color4B output(int(color.x * 255), int(color.y * 255), int(color.z * 255), 255);*/
-				renderImage.WritePixel(x, height - y - 1, color);
+				cube->WritePixel(face, x, height - y - 1, color);
 			}
 		}
-		std::string filename = "D:\\cube_" + config.Face + ".hdr";
-		renderImage.SaveToFile(filename.c_str());
-
-		auto mip = renderImage.DownSample();
-		std::string mipFilename = "D:\\cube_" + config.Face + ".mip" + ".hdr";
-		mip->SaveToFile(mipFilename.c_str());
-		break;
 	}
+
+	cube->AutoGenerateMipmaps();
+	cube->SaveToFile("D:\\env\\env");
 }
