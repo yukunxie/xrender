@@ -73,6 +73,6 @@ private:
 class MeshComponentBuilder
 {
 public:
-	static MeshComponent* CreateBox(const std::string& material = "");
+	static MeshComponent* CreateBox(const std::string& material = "", const Vector3f scale = Vector3f(1.0f));
 	static MeshComponent* CreateSphere(const std::string& material = "Materials/PBR.json");
 };

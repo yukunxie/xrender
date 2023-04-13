@@ -10,6 +10,8 @@
 #include "VertexBuffer.h"
 #include "Object/MeshComponent.h"
 #include "Object/Model.h"
+#include "Graphics/Texture.h"
+#include "ImageLoader.h"
 
 namespace GLTFLoader
 {
@@ -31,7 +33,7 @@ namespace GLTFLoader
 		return InputAttributeFormat::FLOAT;
 	}
 
-	std::shared_ptr<PhysicalImage> _LoadTexture(const tinygltf::Image& tImage)
+	TexturePtr _LoadTexture(const tinygltf::Image& tImage)
 	{
 		auto width = tImage.width;
 		auto height = tImage.height;
@@ -39,11 +41,11 @@ namespace GLTFLoader
 
 		Assert(tImage.pixel_type == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE, "");
 
-		return PhysicalImage::LoadTextureFromData(width, height, component, tImage.image.data(), tImage.image.size());
+		return ImageLoader::LoadTextureFromData(width, height, component, tImage.image.data(), tImage.image.size());
 	}
 
 	template<typename _TextureInfo>
-	std::shared_ptr<PhysicalImage> _LoadTexture(const tinygltf::Model& tModel, const _TextureInfo& info)
+	TexturePtr _LoadTexture(const tinygltf::Model& tModel, const _TextureInfo& info)
 	{
 		if (info.index == -1)
 			return nullptr;

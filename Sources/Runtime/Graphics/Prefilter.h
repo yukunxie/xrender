@@ -2,8 +2,8 @@
 #pragma once
 
 #include "Types.h"
-#include "RxImage.h"
+#include "Texture.h"
 #include <map>
 
 
-void PrefilterEnvironmentTexture(PhysicalImage32F& evnImage);
+TexturePtr PrefilterEnvironmentTexture(PhysicalImage32F& evnImage);

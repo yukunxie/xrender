@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Types.h"
-#include "Graphics/RxImage.h"
+#include "Graphics/Texture.h"
 
 namespace ImageLoader
 {

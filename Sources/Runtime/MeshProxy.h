@@ -93,4 +93,5 @@ void GenerateCube(
 std::vector<Vector3f>&	   vertices,
 std::vector<Vector3f>&	   normals,
 std::vector<Vector2f>&	   uv,
-std::vector<unsigned int>& indices);
+std::vector<unsigned int>& indices,
+Vector3f				   scale = Vector3f(1.0f));

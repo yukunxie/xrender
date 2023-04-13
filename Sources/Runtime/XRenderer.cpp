@@ -18,6 +18,33 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 
+glm::vec3 cameraPos	  = glm::vec3(0.0f, 0.0f, 3.0f);																						 
+glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);																				 
+glm::vec3 cameraUp	  = glm::vec3(0.0f, 1.0f, 0.0f);														
+
+bool firstMouse = true;
+
+float deltaTime		= 0.0f; //当前帧与上一帧的时间差
+float lastFrameTime = 0.0f; //上一帧的时间
+
+float lastX = 300;
+float lastY = 300;
+
+float yaw;
+float pitch;
+
+//滚轮的回调
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+{
+	/*if (fov >= 1.0f && fov <= 45.0f)
+	{
+		fov -= yoffset;
+	}*/
+
+	/*fov = fov <= 1.0f ? 1.0f : fov;
+	fov = fov >= 45.0f ? 45.0f : fov;*/
+}
+
 class Shader
 {
 public:
@@ -159,8 +186,12 @@ void processUI()
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
-int Renderer(const PhysicalImage* renderTarget)
+static std::function<void(float, float)> GMouseMoveHandler;
+
+int Renderer(const PhysicalImage* renderTarget, const std::function<void(float, float)>& mouseMoveHandler)
 {
+	GMouseMoveHandler		= mouseMoveHandler;
+
 	const uint32 SCR_WIDTH	= renderTarget->GetWidth();
 	const uint32 SCR_HEIGHT = renderTarget->GetHeight();
 	// glfw: initialize and configure
@@ -176,7 +207,7 @@ int Renderer(const PhysicalImage* renderTarget)
 
 	// glfw window creation
 	// --------------------
-	GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "LearnOpenGL", NULL, NULL);
+	GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "XRender", NULL, NULL);
 	if (window == NULL)
 	{
 		std::cout << "Failed to create GLFW window" << std::endl;
@@ -185,6 +216,25 @@ int Renderer(const PhysicalImage* renderTarget)
 	}
 	glfwMakeContextCurrent(window);
 	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+
+	//使窗口隐藏光标并且捕捉它
+	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	//使用回调
+	glfwSetCursorPosCallback(window, [](GLFWwindow* window, double xpos, double ypos)
+							 {
+								if (firstMouse) // 这个bool变量初始时是设定为true的
+								{
+									lastX	   = xpos;
+									lastY	   = ypos;
+									firstMouse = false;
+									//        return;
+								}
+								float xoffset = xpos - lastX;
+								float yoffset = lastY - ypos;
+								lastX		  = xpos;
+								lastY		  = ypos; 
+								GMouseMoveHandler(xoffset, yoffset);
+							 });
 
 	// glad: load all OpenGL function pointers
 	// ---------------------------------------

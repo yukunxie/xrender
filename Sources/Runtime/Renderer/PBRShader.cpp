@@ -82,7 +82,7 @@ vec3 cooktorrance_specular(float NdL, float NdV, float NdH, vec3 specular, float
 
 // https://gist.github.com/galek/53557375251e1a942dfa
 // A: light attenuation
-Color4f PBRShading(float metallic, float roughness, const TMat3x3& normalMatrix, Vector3f N, Vector3f V, Vector3f L, Vector3f H, float A, Vector3f Albedo, PhysicalImage* BRDFTexture, const RxImageCube* EnvTexture)
+Color4f PBRShading(float metallic, float roughness, const TMat3x3& normalMatrix, Vector3f N, Vector3f V, Vector3f L, Vector3f H, float A, Vector3f Albedo, const Texture2D* BRDFTexture, const TextureCube* EnvTexture)
 {
 	//// point light direction to point in view space
 	//vec3 local_light_pos = (view_matrix * (/*world_matrix */ light_pos)).xyz;
@@ -273,15 +273,57 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
 vec3 fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness)
 {
 	return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0f - cosTheta, 0.0f, 1.0f), 5.0f);
-}   
+} 
+
+
+static vec2 _SampleSphericalMap(vec3 v)
+{
+	static const vec2 invAtan = vec2(0.1591f, 0.3183f);
+	vec2			  uv	  = vec2(glm::atan(v.z, v.x), asin(v.y));
+	uv *= invAtan;
+	uv += 0.5;
+	return uv;
+}
+
+vec4 CalcIrradiance(TexturePtr environmentMap, vec3 WorldPos)
+{
+	vec3 N = normalize(WorldPos);
+
+	vec3 irradiance = vec3(0.0);
+
+	// tangent space calculation from origin point
+	vec3 up	   = vec3(0.0, 1.0, 0.0);
+	vec3 right = normalize(cross(up, N));
+	up		   = normalize(cross(N, right));
+
+	float sampleDelta = 0.1;
+	float nrSamples	  = 0.0;
+	for (float phi = 0.0; phi < 2.0 * PI; phi += sampleDelta)
+	{
+		for (float theta = 0.0; theta < 0.5 * PI; theta += sampleDelta)
+		{
+			// spherical to cartesian (in tangent space)
+			vec3 tangentSample = vec3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta));
+			// tangent space to world
+			vec3 sampleVec = tangentSample.x * right + tangentSample.y * up + tangentSample.z * N;
+
+			irradiance += texture2D(environmentMap, _SampleSphericalMap(sampleVec)).rgb * cos(theta) * sin(theta);
+			nrSamples++;
+		}
+	}
+	irradiance = PI * irradiance * (1.0f / float(nrSamples));
+
+	return vec4(irradiance, 1.0);
+}
 
 // https://learnopengl.com/PBR/Lighting
 // https://learnopengl.com/code_viewer_gh.php?code=src/6.pbr/1.1.lighting/1.1.pbr.fs
-Color4f PBRShading(const GlobalConstantBuffer& cGlobalBuffer, const GBufferData& gBufferData, PhysicalImage* BRDFTexture, const RxImageCube* EnvTexture)
+Color4f PBRShading(const GlobalConstantBuffer& cGlobalBuffer, const GBufferData& gBufferData, const EnvironmentTextures& gEnvironmentData)
 {
 	vec3  N			= normalize(gBufferData.WorldNormal);
 	vec3  V			= normalize(cGlobalBuffer.EyePos.xyz - gBufferData.Position);
-	vec3  albedo	= gBufferData.Albedo;
+	vec3  R			= reflect(-V, N); 
+	vec3  albedo	= pow(gBufferData.Albedo, vec3(2.2f));
 	float metallic	= gBufferData.Material.r;
 	float roughness = gBufferData.Material.g;
 	vec3  ao		= vec3(1.0f);
@@ -296,14 +338,17 @@ Color4f PBRShading(const GlobalConstantBuffer& cGlobalBuffer, const GBufferData&
 
 	// reflectance equation
 	vec3 Lo = vec3(0.0);
-	for (int i = 0; i < 4; ++i)
+	//for (int i = 0; i < 4; ++i)
+	for (const auto& light : cGlobalBuffer.Lights)
 	{
+		vec3 lightPos = light.Position;
+		vec3 lightColor	  = light.Color * 2.0f;
 		// calculate per-light radiance
-		vec3  L			  = normalize(lightPositions[i] - WorldPos);
+		vec3  L			  = normalize(lightPos - WorldPos);
 		vec3  H			  = normalize(V + L);
-		float distance	  = length(lightPositions[i] - WorldPos);
+		float distance	  = length(lightPos - WorldPos);
 		float attenuation = 1.0 / (distance * distance);
-		vec3  radiance	  = lightColors[i] * attenuation;
+		vec3  radiance	  = lightColor * attenuation;
 
 		// Cook-Torrance BRDF
 		float NDF = DistributionGGX(N, H, roughness);
@@ -332,34 +377,39 @@ Color4f PBRShading(const GlobalConstantBuffer& cGlobalBuffer, const GBufferData&
 		Lo += (kD * albedo / PI + specular) * radiance * NdotL; // note that we already multiplied the BRDF by the Fresnel (kS) so we won't multiply by kS again
 	} 
 
-	//// ambient lighting (we now use IBL as the ambient term)
-	//vec3 F = fresnelSchlickRoughness(max(dot(N, V), 0.0f), F0, roughness);
+	// ambient lighting (we now use IBL as the ambient term)
+	vec3 F = fresnelSchlickRoughness(max(dot(N, V), 0.0f), F0, roughness);
 
-	//vec3 kS = F;
-	//vec3 kD = 1.0f - kS;
-	//kD *= 1.0f - metallic;
+	vec3 kS = F;
+	vec3 kD = 1.0f - kS;
+	kD *= 1.0f - metallic;
 
-	//vec3 irradiance = textureCube(irradianceMap, N).rgb;
-	//vec3 diffuse	= irradiance * albedo;
+	//vec3 irradiance = textureCube(EnvTexture, N).rgb;
+	vec2 nUV		 = _SampleSphericalMap(glm::normalize(N));
+	vec3 irradiance = texture2D(gEnvironmentData.SphericalEnvTexture, vec2(nUV.x, nUV.y), 0).rgb;
+	//vec3 irradiance = CalcIrradiance(gEnvironmentData.SphericalEnvTexture, WorldPos).rgb;
+	vec3 diffuse	= irradiance * albedo;
 
 	//// sample both the pre-filter map and the BRDF lut and combine them together as per the Split-Sum approximation to get the IBL specular part.
-	//const float MAX_REFLECTION_LOD = 4.0;
-	//vec3		prefilteredColor   = textureLod(prefilterMap, R, roughness * MAX_REFLECTION_LOD).rgb;
-	//vec2		brdf			   = texture(brdfLUT, vec2(max(dot(N, V), 0.0), roughness)).rg;
-	//vec3		specular		   = prefilteredColor * (F * brdf.x + brdf.y);
+	const float MAX_REFLECTION_LOD = 4.0;
+	vec2		rUV				   = _SampleSphericalMap(glm::normalize(R));
+	//vec3		prefilteredColor   = textureCubeLod(EnvTexture, R, int(roughness * MAX_REFLECTION_LOD)).rgb;
+	vec3 prefilteredColor = texture2D(gEnvironmentData.SphericalEnvTexture, R, int(roughness * MAX_REFLECTION_LOD)).rgb;
+	vec2 brdf			  = texture2D(gEnvironmentData.BRDFTexture, vec2(max(dot(N, V), 0.0f), 1-roughness)).rg;
+	vec3		specular		   = prefilteredColor * (F * brdf.x + brdf.y);
 
-	//vec3 ambient = (kD * diffuse + specular) * ao;
+	vec3 ambient = (kD * diffuse + specular) * ao;
 
-	//vec3 color = ambient + Lo;
+	vec3 color = ambient + Lo;
 
-	//// HDR tonemapping
-	//color = color / (color + vec3(1.0));
-	//// gamma correct
-	//color = pow(color, vec3(1.0 / 2.2));
+	// HDR tonemapping
+	color = color / (color + vec3(1.0));
+	// gamma correct
+	color = pow(color, vec3(1.0 / 2.2));
 
-	//FragColor = vec4(color, 1.0);
-	//return FragColor;
+	FragColor = vec4(prefilteredColor, 1.0);
+	return FragColor;
 
 
-	return vec4(0.5f * (gBufferData.WorldNormal + 1.0f), 1);
+	return vec4(specular, 1);
 }

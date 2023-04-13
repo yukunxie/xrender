@@ -26,7 +26,7 @@
 #include "Tools.h"
 #include "Light.h"
 #include "MeshProxy.h"
-#include "Graphics/RxImage.h"
+#include "Graphics/PhysicalImage.h"
 #include "Graphics/RxSampler.h"
 #include "Graphics/Prefilter.h"
 #include "Object/MeshComponent.h"
@@ -133,11 +133,7 @@ int height = 1024;
 
 int main()
 {
-	// auto k = GLTFLoader::LoadModelFromGLTF("Models/deer.gltf");
-	 //auto k = GLTFLoader::LoadModelFromGLTF("Models/color_teapot_spheres.gltf");
-	//auto k = GLTFLoader::LoadModelFromGLTF("Scenes/Sponza/Sponza.gltf");
-	//auto k = GLTFLoader::LoadModelFromGLTF("Scenes/cornellbox/cornellBox-2.80-Eevee-gltf.gltf");
-	auto k = GLTFLoader::LoadModelFromGLTF("Models/DamagedHelmet/glTF-Embedded/DamagedHelmet.gltf");
+	
 
 	RTCDevice device = rtcNewDevice("tri_accel=bvh4.triangle4v");
 
@@ -148,10 +144,27 @@ int main()
 
 	RTCScene scene = rtcNewScene(device);
 
-	AddEntityToEmbreeScene(device, scene, k);
+	// Add Sky box
+	{
+		auto	cubeMesh = MeshComponentBuilder::CreateBox("", Vector3f(1000.0f));
+		Entity* skybox	 = new Entity();
+		skybox->AddComponment(cubeMesh);
+		std::vector<Entity*> entities = { skybox };
+		AddEntityToEmbreeScene(device, scene, entities);
+	}
 
-	PhysicalImage32F image("Textures/hdr/newport_loft.hdr");
-	PrefilterEnvironmentTexture(image);
+	{
+		// auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Models/deer.gltf");
+		// auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Models/color_teapot_spheres.gltf");
+		// auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Scenes/Sponza/Sponza.gltf");
+		// auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Scenes/cornellbox/cornellBox-2.80-Eevee-gltf.gltf");
+		auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Models/DamagedHelmet/glTF-Embedded/DamagedHelmet.gltf");
+		AddEntityToEmbreeScene(device, scene, gltfSceneEntities);
+	}
+	
+
+	/*PhysicalImage32F image("Textures/hdr/newport_loft.hdr");
+	PrefilterEnvironmentTexture(image);*/
 
 
 	// addHair(device, scene);
@@ -167,18 +180,11 @@ int main()
 
 	RTCRayHit rayhit;
 
-	Vector3f pos   = { 10.0f, 0.0f, 0.0f };
-	Vector3f foucs = { 0.0f, 0.0f, 0.0f };
+	Vector3f pos   = { 0, -20.0f, 0.0f };
+	Vector3f focus = { 1.0f, 0.0f, 0.0f };
 	Vector3f up	   = { 0, 1, 0 };
+	float	 fov   = 120;
 
-	embree::Camera camera;
-	camera.from		  = embree::Vec3fa(pos.x, pos.y, pos.z);
-	camera.to		  = embree::Vec3fa(foucs.x, foucs.y, foucs.z);
-	camera.up		  = embree::Vec3fa(up.x, up.y, up.z);
-	camera.fov		  = 45;
-	camera.handedness = embree::Camera::Handedness::LEFT_HANDED;
-
-	embree::ISPCCamera ispcCamera = camera.getISPCCamera(width, height);
 
 	RTCRayQueryContext context;
 	void*			   userRayExt = nullptr; //!< can be used to pass extended ray data to callbacks
@@ -219,10 +225,49 @@ int main()
 
 	PBRRender pbrRender;
 
-	std::thread rtRenderThread([&pbrRender, &renderImage, &pos, &foucs, &up, &scene]()
-							   { RTRender(pos, foucs, up, &renderImage, scene, pbrRender); });
+	std::thread rtRenderThread([&pbrRender, &renderImage, &pos, &focus, &up, &fov, &scene]()
+							   { RTRender(pos, focus, up, fov, &renderImage, scene, pbrRender); });
 
-	Renderer(&renderImage);
+
+	const auto mouse_callback = [&](float xoffset, float yoffset)
+	{
+		auto mat = glm::lookAtRH(pos, focus, up);
+
+		//float sensitivity = 0.05f; //灵敏度
+		//xoffset *= sensitivity;
+		//yoffset *= sensitivity;
+
+		//yaw += xoffset;
+		//pitch += yoffset;
+
+		glm::vec3 cameraFront = glm::normalize(focus - pos);
+		float	  raw		  = glm::degrees(glm::asin(cameraFront.y));
+		glm::vec3 cameraDirection = glm::normalize(glm::vec3(cameraFront.x, 0.0f, cameraFront.z));
+		float	  yaw			  = glm::degrees(glm::atan(cameraDirection.z, cameraDirection.x));
+		glm::vec3 cameraUp		  = glm::normalize(up);
+		float	  pitch			  = glm::degrees(glm::acos(glm::dot(cameraDirection, cameraUp)));
+
+		yaw += xoffset;
+		pitch += yoffset;
+
+		pitch = pitch > 89.0f ? 89.0f : pitch;
+		pitch = pitch < -89.0f ? -89.0f : pitch;
+
+		glm::vec3 front;
+		//根据俯仰和偏航角度来算出此向量，也就是速度在三个维度的数值
+		front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
+		front.y = sin(glm::radians(pitch));
+		front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch)) - 1;
+
+		focus = glm::normalize(front) * glm::length(focus - pos);
+		
+		/*std::thread rtRenderThread([&pbrRender, &renderImage, &pos, &focus, &up, &fov, &scene]()
+								   { RTRender(pos, focus, up, fov, &renderImage, scene, pbrRender); });*/
+
+		//RTRender(pos, focus, up, fov, &renderImage, scene, pbrRender);
+	};
+
+	Renderer(&renderImage, mouse_callback);
 	renderImage.SaveToFile("D:/x_render.png");
 
 	rtRenderThread.join();

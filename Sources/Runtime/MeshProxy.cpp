@@ -103,52 +103,29 @@ void GenerateSphereSmooth(int						 radius,
 void GenerateCube(std::vector<Vector3f>&	 vertices,
 				  std::vector<Vector3f>&	 normals,
 				  std::vector<Vector2f>&	 uv,
-				  std::vector<unsigned int>& indices)
+				  std::vector<unsigned int>& indices,
+				  Vector3f					 scale)
 {
 	vertices.resize(8);
-	vertices[0].x = -1;
-	vertices[0].y = -1;
-	vertices[0].z = -1;
-	vertices[1].x = -1;
-	vertices[1].y = -1;
-	vertices[1].z = +1;
-	vertices[2].x = -1;
-	vertices[2].y = +1;
-	vertices[2].z = -1;
-	vertices[3].x = -1;
-	vertices[3].y = +1;
-	vertices[3].z = +1;
-	vertices[4].x = +1;
-	vertices[4].y = -1;
-	vertices[4].z = -1;
-	vertices[5].x = +1;
-	vertices[5].y = -1;
-	vertices[5].z = +1;
-	vertices[6].x = +1;
-	vertices[6].y = +1;
-	vertices[6].z = -1;
-	vertices[7].x = +1;
-	vertices[7].y = +1;
-	vertices[7].z = +1;
+	vertices[0] = Vector3f{ -1, -1, -1 } * scale;
+	vertices[1] = Vector3f{ -1, -1, +1 } * scale;
+	vertices[2] = Vector3f{ -1, +1, -1 } * scale;
+	vertices[3] = Vector3f{ -1, +1, +1 } * scale;
+	vertices[4] = Vector3f{ +1, -1, -1 } * scale;
+	vertices[5] = Vector3f{ +1, -1, +1 } * scale;
+	vertices[6] = Vector3f{ +1, +1, -1 } * scale;
+	vertices[7] = Vector3f{ +1, +1, +1 } * scale;
 
 	uv.resize(8);
 
-	uv[0].x = 0;
-	uv[0].y = 0;
-	uv[1].x = 0;
-	uv[1].y = 1;
-	uv[2].x = 1;
-	uv[2].y = 0;
-	uv[3].x = 1;
-	uv[3].y = 1;
-	uv[4].x = 0;
-	uv[4].y = 0;
-	uv[5].x = 0;
-	uv[5].y = 1;
-	uv[6].x = 1;
-	uv[6].y = 0;
-	uv[7].x = 1;
-	uv[7].y = 1;
+	uv[0] = {0, 0};
+	uv[1] = {0, 1};
+	uv[2] = {1, 0};
+	uv[3] = {1, 1};
+	uv[4] = {0, 0};
+	uv[5] = {0, 1};
+	uv[6] = {1, 0};
+	uv[7] = {1, 1};
 
 	indices.resize(6 * 2 * 3);
 
@@ -156,56 +133,32 @@ void GenerateCube(std::vector<Vector3f>&	 vertices,
 
 	int tri = 0;
 	// left side
-	triangles[tri].v0 = 0;
-	triangles[tri].v1 = 2;
-	triangles[tri].v2 = 1;
+	triangles[tri] = {0, 2, 1};
 	tri++;
-	triangles[tri].v0 = 1;
-	triangles[tri].v1 = 2;
-	triangles[tri].v2 = 3;
+	triangles[tri] = {1, 2, 3};
 	tri++;
 	// right side
-	triangles[tri].v0 = 4;
-	triangles[tri].v1 = 5;
-	triangles[tri].v2 = 6;
+	triangles[tri] = {4, 5, 6};
 	tri++;
-	triangles[tri].v0 = 5;
-	triangles[tri].v1 = 7;
-	triangles[tri].v2 = 6;
+	triangles[tri] = {5, 7, 6};
 	tri++;
 	// bottom side
-	triangles[tri].v0 = 0;
-	triangles[tri].v1 = 1;
-	triangles[tri].v2 = 4;
+	triangles[tri] = { 0, 1, 4 };
 	tri++;
-	triangles[tri].v0 = 1;
-	triangles[tri].v1 = 5;
-	triangles[tri].v2 = 4;
+	triangles[tri] = {1, 5, 4};
 	tri++;
 	// top side
-	triangles[tri].v0 = 2;
-	triangles[tri].v1 = 6;
-	triangles[tri].v2 = 3;
+	triangles[tri] = { 2, 6, 3 };
 	tri++;
-	triangles[tri].v0 = 3;
-	triangles[tri].v1 = 6;
-	triangles[tri].v2 = 7;
+	triangles[tri] = { 3, 6, 7 };
 	tri++;
 	// front side
-	triangles[tri].v0 = 0;
-	triangles[tri].v1 = 4;
-	triangles[tri].v2 = 2;
+	triangles[tri] = { 0, 4, 2 };
 	tri++;
-	triangles[tri].v0 = 2;
-	triangles[tri].v1 = 4;
-	triangles[tri].v2 = 6;
+	triangles[tri] = { 2, 4, 6 };
 	tri++;
 	// back side
-	triangles[tri].v0 = 1;
-	triangles[tri].v1 = 3;
-	triangles[tri].v2 = 5;
+	triangles[tri] = { 1, 3, 5 };
 	tri++;
-	triangles[tri].v0 = 3;
-	triangles[tri].v1 = 7;
-	triangles[tri].v2 = 5;
+	triangles[tri] = { 3, 7, 5 };
 }

@@ -122,7 +122,7 @@ void MeshComponent::Tick(float dt)
 	//Engine::GetRenderScene()->AddRenderObject(&RenderObject_);
 }
 
-MeshComponent* MeshComponentBuilder::CreateBox(const std::string& material)
+MeshComponent* MeshComponentBuilder::CreateBox(const std::string& material, const Vector3f scale)
 {
 	MeshComponent* meshComp = new MeshComponent();
 	meshComp->Geometry_ = new Geometry;
@@ -160,6 +160,11 @@ MeshComponent* MeshComponentBuilder::CreateBox(const std::string& material)
 		{-1.0f, 1.0f,  1.0f},
 		{-1.0f, 1.0f,  -1.0f},
 	};
+
+	for (auto& p : positions)
+	{
+		p *= scale;
+	}
 
 	std::vector<TVector3> colors = {
 		{1.0f, 1.0f, 1.0f},

@@ -1,4 +1,5 @@
 #include "Texture.h"
+#include "Utils/FileSystem.h"
 
 Texture2D::Texture2D(const std::string& filename)
 {
@@ -61,14 +62,14 @@ void Texture2D::AutoGenerateMipmaps()
 void Texture2D::SaveToFile(const std::string& filenameWithoutSuffix) const
 {
 	std::string suffix = ".png";
-	if (mTextureFormat == TextureFormat::RGBA32FLOAT)
+	/*if (mTextureFormat == TextureFormat::RGBA32FLOAT)
 	{
 		suffix = ".hdr";
 	}
 	else if (mTextureFormat == TextureFormat::RGB32FLOAT)
 	{
 		suffix = ".hdr";
-	}
+	}*/
 
 	if (mImages.size() == 1)
 	{
@@ -80,8 +81,36 @@ void Texture2D::SaveToFile(const std::string& filenameWithoutSuffix) const
 		{
 			std::string filename = filenameWithoutSuffix + "-mip-" + std::to_string(i) + suffix;
 			mImages[i]->SaveToFile(filename.c_str());
+			break;
 		}
 	}
+}
+
+TextureCube::TextureCube(const std::string& cubefilename)
+{
+	static const std::vector<std::string> sImageExts = { ".jpg", ".png", ".tag", ".bmp", };
+	constexpr uint32 kFaceNum			  = 6;
+	const char*							  kFaceNames[kFaceNum] = { "nx", "px", "py", "ny", "nz", "pz" };
+	std::string		 fileExt			  = "";
+	for (const auto& ext : sImageExts)
+	{
+		std::string filename = "Textures\\CubeTextures\\"s + cubefilename + "\\"s + "nx"s + ext;
+		if (!FileSystem::GetInstance()->GetAbsFilePath(filename.c_str()).empty())
+		{
+			fileExt = ext;
+			break;
+		}
+	}
+
+	Assert(!fileExt.empty());
+
+	for (int face = 0; face < kFaceNum; ++face)
+	{
+		std::string filename = "Textures\\CubeTextures\\"s + cubefilename + "\\"s + kFaceNames[face] + fileExt;
+		mFaces[face]		 = std::make_shared<Texture2D>(filename.c_str());
+	}
+
+	AutoGenerateMipmaps();
 }
 
 TextureCube::TextureCube(uint32 width, uint32 height, TextureFormat textureFormat, const uint8* data)

@@ -160,8 +160,18 @@ namespace ImageLoader
 
     TexturePtr LoadTextureFromData(uint32 texWidth, uint32 texHeight, uint32 texChannels, const std::uint8_t* pixels, std::uint32_t byteLength, const std::string& debugName)
     {
-		return std::make_shared<PhysicalImage>(texWidth, texHeight, texChannels, pixels);
-
+		if (texChannels == 3)
+		{
+			return std::make_shared<Texture2D>(texWidth, texHeight, TextureFormat::RGB8UNORM, pixels);
+		}
+		else if (texChannels == 4)
+		{
+			return std::make_shared<Texture2D>(texWidth, texHeight, TextureFormat::RGBA8UNORM, pixels);
+		}
+		else
+		{
+			Assert(false);
+		}
         //ImageData imageData;
         //{
         //    imageData.debugName = debugName;

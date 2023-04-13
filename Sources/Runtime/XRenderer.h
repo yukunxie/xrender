@@ -1,5 +1,5 @@
 #pragma once
 
-#include "Graphics/RxImage.h"
+#include "Graphics/PhysicalImage.h"
 
-int Renderer(const PhysicalImage* renderTarget);
+int Renderer(const PhysicalImage* renderTarget, const std::function<void(float, float)>& mouseMoveHandler);

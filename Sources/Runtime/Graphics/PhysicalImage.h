@@ -5,8 +5,6 @@
 
 class PhysicalImage;
 
-typedef std::shared_ptr<PhysicalImage> TexturePtr;
-
 class PhysicalImage
 {
 protected:
@@ -46,7 +44,7 @@ public:
 
 	virtual void WritePixel(int w, int h, Color4f color);
 
-	virtual void SaveToFile(const char* filename);
+	virtual void SaveToFile(const std::string& filename);
 
 	int GetWidth() const
 	{
@@ -68,7 +66,7 @@ public:
 		return mData;
 	}
 
-	static std::shared_ptr<PhysicalImage> LoadTextureFromUri(const std::string& filename);
+	/*static std::shared_ptr<PhysicalImage> LoadTextureFromUri(const std::string& filename);
 
 	static std::shared_ptr<PhysicalImage> LoadCubeTexture(const std::string& cubeTextureName);
 
@@ -76,7 +74,7 @@ public:
 
 	static std::shared_ptr<PhysicalImage> LoadTextureFromData(uint32 width, uint32 height, uint32 component, const uint8* data, uint32 byteLength, const std::string& debugName = "");
 
-	static std::shared_ptr<PhysicalImage> Create3DNoiseTexture();
+	static std::shared_ptr<PhysicalImage> Create3DNoiseTexture();*/
 
 	virtual PhysicalImage* DownSample() const;
 
@@ -103,7 +101,7 @@ public:
 
 	virtual void WritePixel(int w, int h, Color4f color) override;
 
-	virtual void SaveToFile(const char* filename) override;
+	virtual void SaveToFile(const std::string& filename) override;
 };
 
 class RxImageCube : public PhysicalImage
@@ -124,5 +122,5 @@ public:
 
 
 protected:
-	TexturePtr mTextures[6];
+	std::shared_ptr<PhysicalImage> mTextures[6];
 };

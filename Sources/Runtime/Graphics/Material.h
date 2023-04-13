@@ -2,7 +2,7 @@
 #pragma once
 
 #include "Types.h"
-#include "RxImage.h"
+#include "Texture.h"
 #include <map>
 
 struct MaterialParameter
@@ -12,13 +12,27 @@ struct MaterialParameter
 	std::unique_ptr<uint8> Data;
 };
 
+struct LightData
+{
+	Vector3f Position;
+	Vector3f Color;
+};
+
 struct GlobalConstantBuffer
 {
-	Vector4f EyePos;
-	Vector4f SunLight;
-	Vector4f SunLightColor;
-	TMat4x4	 ViewMatrix;
-	TMat4x4	 ProjMatrix;
+	Vector4f			   EyePos;
+	Vector4f			   SunLight;
+	Vector4f			   SunLightColor;
+	TMat4x4				   ViewMatrix;
+	TMat4x4				   ProjMatrix;
+	std::vector<LightData> Lights;
+};
+
+struct EnvironmentTextures
+{
+	TexturePtr EnvTexture;
+	TexturePtr BRDFTexture;
+	TexturePtr SphericalEnvTexture;
 };
 
 struct ShadingBuffer

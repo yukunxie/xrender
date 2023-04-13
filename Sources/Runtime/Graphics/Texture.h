@@ -2,7 +2,9 @@
 #pragma once
 
 #include "Types.h"
-#include "RxImage.h"
+#include "PhysicalImage.h"
+#include <string>
+using namespace std::string_literals;
 
 class Texture
 {
@@ -42,6 +44,8 @@ protected:
 class TextureCube : public Texture
 {
 public:
+	TextureCube(const std::string& cubefilename);
+
 	TextureCube(uint32 width, uint32 height, TextureFormat textureFormat, const uint8* data = nullptr);
 
 	void WritePixel(uint32 face, uint32 w, uint32 h, Color4f color);
@@ -50,6 +54,14 @@ public:
 
 	virtual void SaveToFile(const std::string& filenameWithoutSuffix) const override;
 
+	std::shared_ptr<Texture2D> GetFace(int face) const 
+	{
+		return mFaces[face];
+	}
+
 protected:
 	std::shared_ptr<Texture2D> mFaces[6];
 };
+
+
+typedef std::shared_ptr<Texture> TexturePtr;

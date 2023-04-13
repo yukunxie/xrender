@@ -27,7 +27,7 @@
 #include "Tools.h"
 #include "Light.h"
 #include "MeshProxy.h"
-#include "Graphics/RxImage.h"
+#include "Graphics/PhysicalImage.h"
 #include "Graphics/RxSampler.h"
 #include "Texture.h"
 #include "Object/MeshComponent.h"
@@ -47,49 +47,52 @@ static vec2 _SampleSphericalMap(vec3 v)
 }
 
 static std::vector<Vector3f> GUniformCubeVertices = {
-	// back face
-	{ -1.0f, -1.0f, -1.0f }, // bottom-left
-	{ 1.0f, 1.0f, -1.0f },	 // top-right
-	{ 1.0f, -1.0f, -1.0f },	 // bottom-right
-	{ 1.0f, 1.0f, -1.0f },	 // top-right
-	{ -1.0f, -1.0f, -1.0f }, // bottom-left
-	{ -1.0f, 1.0f, -1.0f },	 // top-left
-	// front face
-	{ -1.0f, -1.0f, 1.0f }, // bottom-left
-	{ 1.0f, -1.0f, 1.0f },	// bottom-right
-	{ 1.0f, 1.0f, 1.0f },	// top-right
-	{ 1.0f, 1.0f, 1.0f },	// top-right
-	{ -1.0f, 1.0f, 1.0f },	// top-left
-	{ -1.0f, -1.0f, 1.0f }, // bottom-left
-	// left face
-	{ -1.0f, 1.0f, 1.0f },	 // top-right
-	{ -1.0f, 1.0f, -1.0f },	 // top-left
-	{ -1.0f, -1.0f, -1.0f }, // bottom-left
-	{ -1.0f, -1.0f, -1.0f }, // bottom-left
-	{ -1.0f, -1.0f, 1.0f },	 // bottom-right
-	{ -1.0f, 1.0f, 1.0f },	 // top-right
-	// right face
-	{ 1.0f, 1.0f, 1.0f },	// top-left
-	{ 1.0f, -1.0f, -1.0f }, // bottom-right
-	{ 1.0f, 1.0f, -1.0f },	// top-right
-	{ 1.0f, -1.0f, -1.0f }, // bottom-right
-	{ 1.0f, 1.0f, 1.0f },	// top-left
-	{ 1.0f, -1.0f, 1.0f },	// bottom-left
-	// bottom face
-	{ -1.0f, -1.0f, -1.0f }, // top-right
-	{ 1.0f, -1.0f, -1.0f },	 // top-left
-	{ 1.0f, -1.0f, 1.0f },	 // bottom-left
-	{ 1.0f, -1.0f, 1.0f },	 // bottom-left
-	{ -1.0f, -1.0f, 1.0f },	 // bottom-right
-	{ -1.0f, -1.0f, -1.0f }, // top-right
-	// top face
-	{ -1.0f, 1.0f, -1.0f }, // top-left
-	{ 1.0f, 1.0f, 1.0f },	// bottom-right
-	{ 1.0f, 1.0f, -1.0f },	// top-right
-	{ 1.0f, 1.0f, 1.0f },	// bottom-right
-	{ -1.0f, 1.0f, -1.0f }, // top-left
-	{ -1.0f, 1.0f, 1.0f }	// bottom-left
+	// Front face
+	{ -1.0f, -1.0f, 1.0f },
+	{ 1.0f, -1.0f, 1.0f },
+	{ 1.0f, 1.0f, 1.0f },
+	{ -1.0f, 1.0f, 1.0f },
+	// Back face
+	{ -1.0f, -1.0f, -1.0f },
+	{ -1.0f, 1.0f, -1.0f },
+	{ 1.0f, 1.0f, -1.0f },
+	{ 1.0f, -1.0f, -1.0f },
+	// Top face
+	{ -1.0f, 1.0f, -1.0f },
+	{ -1.0f, 1.0f, 1.0f },
+	{ 1.0f, 1.0f, 1.0f },
+	{ 1.0f, 1.0f, -1.0f },
+	// Bottom face
+	{ -1.0f, -1.0f, -1.0f },
+	{ 1.0f, -1.0f, -1.0f },
+	{ 1.0f, -1.0f, 1.0f },
+	{ -1.0f, -1.0f, 1.0f },
+	// Right face
+	{ 1.0f, -1.0f, -1.0f },
+	{ 1.0f, 1.0f, -1.0f },
+	{ 1.0f, 1.0f, 1.0f },
+	{ 1.0f, -1.0f, 1.0f },
+	// Left face
+	{ -1.0f, -1.0f, -1.0f },
+	{ -1.0f, -1.0f, 1.0f },
+	{ -1.0f, 1.0f, 1.0f },
+	{ -1.0f, 1.0f, -1.0f },
 };
+
+std::vector<std::uint32_t> GUniformCubeIndices = {
+		// front
+		0, 1, 2, 0, 2, 3,
+		// back
+		4, 5, 6, 4, 6, 7,
+		// top
+		8, 9, 10, 8, 10, 11,
+		// bottom
+		12, 13, 14, 12, 14, 15,
+		// right
+		16, 17, 18, 16, 18, 19,
+		// left
+		20, 21, 22, 20, 22, 23,
+	};
 
 /* adds a cube to the scene */
 static unsigned int AddPrefilterCube(RTCDevice device_i, RTCScene scene_i)
@@ -101,14 +104,8 @@ static unsigned int AddPrefilterCube(RTCDevice device_i, RTCScene scene_i)
 	Vector3f* vert = (Vector3f*)rtcSetNewGeometryBuffer(mesh, RTC_BUFFER_TYPE_VERTEX, 0, RTC_FORMAT_FLOAT3, sizeof(Vector3f), GUniformCubeVertices.size());
 	memcpy(vert, GUniformCubeVertices.data(), sizeof(GUniformCubeVertices[0]) * GUniformCubeVertices.size());
 
-	std::vector<std::uint32_t> cubeIndices;
-	for (std::uint32_t i = 0; i < GUniformCubeVertices.size(); ++i)
-	{
-		cubeIndices.push_back(i);
-	}
-
-	unsigned int* index = (unsigned int*)rtcSetNewGeometryBuffer(mesh, RTC_BUFFER_TYPE_INDEX, 0, RTC_FORMAT_UINT3, 3 * sizeof(unsigned int), cubeIndices.size() / 3);
-	memcpy(index, cubeIndices.data(), sizeof(cubeIndices[0]) * cubeIndices.size());
+	unsigned int* index = (unsigned int*)rtcSetNewGeometryBuffer(mesh, RTC_BUFFER_TYPE_INDEX, 0, RTC_FORMAT_UINT3, 3 * sizeof(unsigned int), GUniformCubeIndices.size() / 3);
+	memcpy(index, GUniformCubeIndices.data(), sizeof(GUniformCubeIndices[0]) * GUniformCubeIndices.size());
 
 	rtcCommitGeometry(mesh);
 
@@ -118,11 +115,11 @@ static unsigned int AddPrefilterCube(RTCDevice device_i, RTCScene scene_i)
 	return geomID;
 }
 
-void PrefilterEnvironmentTexture(PhysicalImage32F& evnImage)
+TexturePtr PrefilterEnvironmentTexture(PhysicalImage32F& evnImage)
 {
 	SCOPED_PROFILING_GUARD("PrefilterEnvironmentTexture");
-	int width  = 512;
-	int height = 512;
+	int width  = 1024;
+	int height = 1024;
 
 	RTCDevice device = rtcNewDevice("tri_accel=bvh4.triangle4v");
 
@@ -148,8 +145,8 @@ void PrefilterEnvironmentTexture(PhysicalImage32F& evnImage)
 	const CameraConfig cameras[] = {
 		{ "px", glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f) },
 		{ "nx", glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f) },
-		{ "py", glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f) },
 		{ "ny", glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f) },
+		{ "py", glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f) },
 		{ "pz", glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f) },
 		{ "nz", glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f) }
 	};
@@ -158,6 +155,15 @@ void PrefilterEnvironmentTexture(PhysicalImage32F& evnImage)
 	RxSampler* sampler = RxSampler::CreateSampler();
 
 	auto* cube = new TextureCube(width, height, TextureFormat::RGBA32FLOAT, nullptr);
+
+	static const glm::vec4 PredefinedColors[] = {
+		glm::vec4(1.0f, 0.0f, 0.0f, 1.0f), // Red
+		glm::vec4(0.0f, 1.0f, 0.0f, 1.0f), // Green
+		glm::vec4(0.0f, 0.0f, 1.0f, 1.0f), // Blue
+		glm::vec4(0.5f, 0.0f, 1.0f, 1.0f), // Purple
+		glm::vec4(1.0f, 0.5f, 0.0f, 1.0f), // Orange
+		glm::vec4(0.0f, 0.5f, 1.0f, 1.0f)	 // Indigo
+	};
 
 	constexpr int NUM_CORE = 6;
 #pragma omp parallel for num_threads(NUM_CORE)
@@ -197,18 +203,33 @@ void PrefilterEnvironmentTexture(PhysicalImage32F& evnImage)
 				Assert(rayhits.hit.geomID != RTC_INVALID_GEOMETRY_ID);
 
 				int	 primId = rayhits.hit.primID;
-				vec3 p0		= GUniformCubeVertices[primId * 3 + 0];
-				vec3 p1		= GUniformCubeVertices[primId * 3 + 1];
-				vec3 p2		= GUniformCubeVertices[primId * 3 + 2];
 
+				//printf("face=%d, primId=%d\n", face, primId);
+				int	 index0 = GUniformCubeIndices[primId * 3 + 0];
+				int	 index1 = GUniformCubeIndices[primId * 3 + 1];
+				int	 index2 = GUniformCubeIndices[primId * 3 + 2];
+				vec3 p0		= GUniformCubeVertices[index0];
+				vec3 p1		= GUniformCubeVertices[index1];
+				vec3 p2		= GUniformCubeVertices[index2];
+
+				float u = rayhits.hit.u;
+				float v = rayhits.hit.v;
+				//Vector3f pos = u * p0 + v * p1 + (1 - u - v) * p2;
 				vec3	pos	  = p0 + rayhits.hit.u * (p1 - p0) + rayhits.hit.v * (p2 - p0);
 				vec2	uv	  = _SampleSphericalMap(glm::normalize(pos));
-				Color4f color = texture2D(&evnImage, uv);
-				cube->WritePixel(face, x, height - y - 1, color);
+				//Color4f color = texture2D(&evnImage, uv);
+
+				Color4f color = evnImage.ReadPixel(int(uv.x * evnImage.GetWidth()), int (uv.y * evnImage.GetHeight()));
+				cube->WritePixel(face, width - 1 - x, height - 1 - y, color);
+				//cube->WritePixel(face, x, height - y - 1, vec4(float(x)/ width, float(y)/height, 0, 1));
+				//cube->WritePixel(face, x, height - y - 1, PredefinedColors[face]);
+
 			}
 		}
 	}
 
 	cube->AutoGenerateMipmaps();
 	cube->SaveToFile("D:\\env\\env");
+
+	return TexturePtr((Texture*)cube);
 }

@@ -1,4 +1,4 @@
-#include "RxImage.h"
+#include "PhysicalImage.h"
 
 #include <span>
 #include <string>
@@ -85,9 +85,9 @@ void PhysicalImage::WritePixel(int w, int h, Color4f color)
 	}
 }
 
-void PhysicalImage::SaveToFile(const char* filename)
+void PhysicalImage::SaveToFile(const std::string& filename)
 {
-	stbi_write_png(filename, mWidth, mHeight, mChannels, mData, mWidth * mChannels);
+	stbi_write_png(filename.c_str(), mWidth, mHeight, mChannels, mData, mWidth * mChannels);
 }
 
 PhysicalImage* PhysicalImage::DownSample() const
@@ -123,31 +123,31 @@ PhysicalImage* PhysicalImage::DownSample() const
 	return img;
 }
 
-// static
-std::shared_ptr<PhysicalImage> PhysicalImage::LoadTextureFromUri(const std::string& filename)
-{
-	return (ImageLoader::LoadTextureFromUri(filename));
-}
+//// static
+//std::shared_ptr<PhysicalImage> PhysicalImage::LoadTextureFromUri(const std::string& filename)
+//{
+//	return (ImageLoader::LoadTextureFromUri(filename));
+//}
+//
+//std::shared_ptr<PhysicalImage> PhysicalImage::LoadCubeTexture(const std::string& cubeTextureName)
+//{
+//	return (ImageLoader::LoadCubeTexture(cubeTextureName));
+//}
+//
+//std::shared_ptr<PhysicalImage> PhysicalImage::LoadTextureFromData(const std::uint8_t* data, std::uint32_t byteLength, const std::string& debugName)
+//{
+//	return (ImageLoader::LoadTextureFromData(data, byteLength, debugName));
+//}
 
-std::shared_ptr<PhysicalImage> PhysicalImage::LoadCubeTexture(const std::string& cubeTextureName)
-{
-	return (ImageLoader::LoadCubeTexture(cubeTextureName));
-}
-
-std::shared_ptr<PhysicalImage> PhysicalImage::LoadTextureFromData(const std::uint8_t* data, std::uint32_t byteLength, const std::string& debugName)
-{
-	return (ImageLoader::LoadTextureFromData(data, byteLength, debugName));
-}
-
-std::shared_ptr<PhysicalImage> PhysicalImage::LoadTextureFromData(uint32 width, uint32 height, uint32 component, const uint8* data, uint32 byteLength, const std::string& debugName)
-{
-	return (ImageLoader::LoadTextureFromData(width, height, component, data, byteLength, debugName));
-}
-
-std::shared_ptr<PhysicalImage> PhysicalImage::Create3DNoiseTexture()
-{
-	return (ImageLoader::Create3DFloatTexture(256, 256, 128));
-}
+//std::shared_ptr<PhysicalImage> PhysicalImage::LoadTextureFromData(uint32 width, uint32 height, uint32 component, const uint8* data, uint32 byteLength, const std::string& debugName)
+//{
+//	return (ImageLoader::LoadTextureFromData(width, height, component, data, byteLength, debugName));
+//}
+//
+//std::shared_ptr<PhysicalImage> PhysicalImage::Create3DNoiseTexture()
+//{
+//	return (ImageLoader::Create3DFloatTexture(256, 256, 128));
+//}
 
 
 PhysicalImage32F::PhysicalImage32F(const char* hdrFilename)
@@ -200,9 +200,28 @@ void PhysicalImage32F::WritePixel(int w, int h, Color4f color)
 	}
 }
 
-void PhysicalImage32F::SaveToFile(const char* filename)
+void PhysicalImage32F::SaveToFile(const std::string& filename)
 {
-	stbi_write_hdr(filename, mWidth, mHeight, mChannels, (const float*)mData);
+	if (filename.ends_with(".hdr"))
+	{
+		stbi_write_hdr(filename.c_str(), mWidth, mHeight, mChannels, (const float*)mData); 
+	}
+	else
+	{
+		PhysicalImage image(mWidth, mHeight, 4);
+		for (int w = 0; w < mWidth; ++w)
+		{
+			for (int h = 0; h < mHeight; ++h)
+			{
+				Color3f color = ReadPixel(w, h).xyz;
+				//	// HDR tonemapping
+				color = color / (color + vec3(1.0f));
+				color = pow(color, vec3(1.0 / 2.2));
+				image.WritePixel(w, h, Color4f(color, 1.0f));
+			}
+		}
+		image.SaveToFile(filename);
+	}
 }
 
 RxImageCube::RxImageCube(const char* cubeTextureName)
@@ -246,7 +265,7 @@ Color4f RxImageCube::ReadPixel(Vector3f TexCoords) const
 	const int NUM_TEX  = 6;
 	int		  texIndex = static_cast<int>(angle / (glm::two_pi<float>() / NUM_TEX)) % NUM_TEX;*/
 
-	auto posx = mTextures[0];
+	/*auto posx = mTextures[0];
 	auto negx = mTextures[1];
 
 	auto posy = mTextures[2];
@@ -276,5 +295,6 @@ Color4f RxImageCube::ReadPixel(Vector3f TexCoords) const
 			return texture2D(posz.get(), Vector2f((TexCoords.x + 1) / 2, (TexCoords.y + 1) / 2));
 		else if (TexCoords.z < 0)
 			return texture2D(negz.get(), Vector2f((TexCoords.x + 1) / 2, (TexCoords.y + 1) / 2));
-	}
+	}*/
+	return {};
 }
