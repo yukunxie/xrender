@@ -2,7 +2,7 @@
 
 
 ## Keywords
-  `Embree` `Raytracing` `CPU Rendering` `OpenMP` 
+  `Embree` `Raytracing` `CPU Rendering` `OpenMP`  `C++`
 
 Render Scene with raytracing
 
