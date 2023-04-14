@@ -128,8 +128,8 @@ void AddEntityToEmbreeScene(RTCDevice device_i, RTCScene scene_i, const std::vec
 	}
 }
 
-int width  = 1024;
-int height = 1024;
+int width  = 2048;
+int height = 2048;
 
 int main()
 {
@@ -146,12 +146,21 @@ int main()
 
 	// Add Sky box
 	{
-		auto	cubeMesh = MeshComponentBuilder::CreateBox("", Vector3f(1000.0f));
+		//auto	cubeMesh = MeshComponentBuilder::CreateBox("", Vector3f(1000.0f));
+		auto	cubeMesh = MeshComponentBuilder::CreateSkyBox(Vector3f(1000.0f));
 		Entity* skybox	 = new Entity();
 		skybox->AddComponment(cubeMesh);
 		std::vector<Entity*> entities = { skybox };
 		AddEntityToEmbreeScene(device, scene, entities);
 	}
+
+	//{
+	//	auto	cubeMesh = MeshComponentBuilder::CreateSphere("");
+	//	Entity* skybox	 = new Entity();
+	//	skybox->AddComponment(cubeMesh);
+	//	std::vector<Entity*> entities = { skybox };
+	//	AddEntityToEmbreeScene(device, scene, entities);
+	//}
 
 	{
 		// auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Models/deer.gltf");
@@ -180,10 +189,10 @@ int main()
 
 	RTCRayHit rayhit;
 
-	Vector3f pos   = { 0, -20.0f, 0.0f };
-	Vector3f focus = { 1.0f, 0.0f, 0.0f };
+	Vector3f pos   = { -3, 5.0f, -3.0f };
+	Vector3f focus = { .0f, 0.0f, 0.0f };
 	Vector3f up	   = { 0, 1, 0 };
-	float	 fov   = 120;
+	float	 fov   = 60;
 
 
 	RTCRayQueryContext context;

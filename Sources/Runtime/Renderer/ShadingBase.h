@@ -19,6 +19,8 @@ struct GBufferData
 	vec3 WorldNormal;
 	vec3 Position;
 	vec3 Material; // r: metallic, g: roughness, b: Shading Model
+	vec3 EmissiveColor = vec3(0);
+	vec3 AOMask = vec3(1.0f);
 };
 
 template<class T>

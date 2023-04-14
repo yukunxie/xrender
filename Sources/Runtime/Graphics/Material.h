@@ -33,6 +33,7 @@ struct EnvironmentTextures
 	TexturePtr EnvTexture;
 	TexturePtr BRDFTexture;
 	TexturePtr SphericalEnvTexture;
+	TexturePtr IrradianceTexture;
 };
 
 struct ShadingBuffer

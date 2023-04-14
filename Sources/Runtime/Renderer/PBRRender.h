@@ -22,12 +22,14 @@ class Renderer
 public:
 	Renderer()
 	{
-		mBRDFTexture = std::make_shared< Texture2D>("Engine/IBL_BRDF.png");
+		mBRDFTexture = std::make_shared< Texture2D>("Engine/lutBRDF.png");
 		//mEnvTexture	 = std::make_shared<>("SkyBox0");
 
 		/*PhysicalImage32F image("Textures/hdr/newport_loft.hdr");
 		mEnvTexture = PrefilterEnvironmentTexture(image);*/
 		mEnvTexture = std::make_shared<TextureCube>("SkyBox0");
+
+		mIrradianceTexture = std::make_shared<TextureCube>("PreIrradiance0");
 
 		mSphericalEnvTexture = std::make_shared<Texture2D>("Textures/hdr/newport_loft.hdr");
 		mSphericalEnvTexture->AutoGenerateMipmaps();
@@ -44,6 +46,7 @@ public:
 protected:
 	TexturePtr mBRDFTexture;
 	TexturePtr mEnvTexture;
+	TexturePtr mIrradianceTexture;
 	TexturePtr mSphericalEnvTexture;
 };
 

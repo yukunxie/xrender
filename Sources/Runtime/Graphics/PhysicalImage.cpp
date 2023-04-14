@@ -26,7 +26,7 @@ PhysicalImage::PhysicalImage(const char* filename)
 {
 	std::string absFilename = FileSystem::GetInstance()->GetAbsFilePath(filename);
 	int			w, h, c;
-	mData	  = stbi_load(absFilename.c_str(), &w, &h, &c, 4);
+	mData	  = stbi_load(absFilename.c_str(), &w, &h, &c, 0);
 	mWidth	  = w;
 	mHeight	  = h;
 	mChannels = c;

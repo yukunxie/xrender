@@ -326,7 +326,7 @@ Color4f PBRShading(const GlobalConstantBuffer& cGlobalBuffer, const GBufferData&
 	vec3  albedo	= pow(gBufferData.Albedo, vec3(2.2f));
 	float metallic	= gBufferData.Material.r;
 	float roughness = gBufferData.Material.g;
-	vec3  ao		= vec3(1.0f);
+	vec3  ao		= gBufferData.AOMask;
 	vec4  FragColor(0, 0, 0, 1);
 
 	// calculate reflectance at normal incidence; if dia-electric (like plastic) use F0
@@ -386,30 +386,28 @@ Color4f PBRShading(const GlobalConstantBuffer& cGlobalBuffer, const GBufferData&
 
 	//vec3 irradiance = textureCube(EnvTexture, N).rgb;
 	vec2 nUV		 = _SampleSphericalMap(glm::normalize(N));
-	vec3 irradiance = texture2D(gEnvironmentData.SphericalEnvTexture, vec2(nUV.x, nUV.y), 0).rgb;
+	vec3 irradiance = textureCubeLod(gEnvironmentData.IrradianceTexture, WorldPos, 0).rgb;
 	//vec3 irradiance = CalcIrradiance(gEnvironmentData.SphericalEnvTexture, WorldPos).rgb;
 	vec3 diffuse	= irradiance * albedo;
 
 	//// sample both the pre-filter map and the BRDF lut and combine them together as per the Split-Sum approximation to get the IBL specular part.
 	const float MAX_REFLECTION_LOD = 4.0;
 	vec2		rUV				   = _SampleSphericalMap(glm::normalize(R));
-	//vec3		prefilteredColor   = textureCubeLod(EnvTexture, R, int(roughness * MAX_REFLECTION_LOD)).rgb;
-	vec3 prefilteredColor = texture2D(gEnvironmentData.SphericalEnvTexture, R, int(roughness * MAX_REFLECTION_LOD)).rgb;
-	vec2 brdf			  = texture2D(gEnvironmentData.BRDFTexture, vec2(max(dot(N, V), 0.0f), 1-roughness)).rg;
+	vec3		prefilteredColor   = textureCubeLod(gEnvironmentData.EnvTexture, glm::normalize(R), int(roughness * MAX_REFLECTION_LOD)).rgb;
+	//vec3		prefilteredColor   = texture2D(gEnvironmentData.SphericalEnvTexture, rUV, int(roughness * MAX_REFLECTION_LOD)).rgb;
+	vec2 brdf			  = texture2D(gEnvironmentData.BRDFTexture, vec2(max(dot(N, V), 0.0f), roughness)).rg;
 	vec3		specular		   = prefilteredColor * (F * brdf.x + brdf.y);
 
-	vec3 ambient = (kD * diffuse + specular) * ao;
+	vec3 ambient = (kD * diffuse + specular + gBufferData.EmissiveColor) * ao;
 
-	vec3 color = ambient + Lo;
+	vec3 color = ambient + Lo ;
 
 	// HDR tonemapping
 	color = color / (color + vec3(1.0));
 	// gamma correct
 	color = pow(color, vec3(1.0 / 2.2));
 
-	FragColor = vec4(prefilteredColor, 1.0);
+	FragColor = vec4(color, 1.0);
 	return FragColor;
 
-
-	return vec4(specular, 1);
 }
