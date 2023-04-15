@@ -147,8 +147,8 @@ Color4f textureCubeLod(const Texture* texture, Vector3f dir, float lod)
 	const auto&		  faceTexture = ((const TextureCube*)texture)->GetFace(face);
 	static RxSampler* sampler	  = RxSampler::CreateSampler();
 
-	int		lod0 = int(glm::floor(lod));
-	int		lod1 = int(glm::ceil(lod));
+	int		lod0 = std::max(0, int(glm::floor(lod)));
+	int		lod1 = std::max(0, int(glm::ceil(lod)));
 
 	Color4f c0	 = sampler->ReadPixel(faceTexture.get(), uv, lod0);
 	Color4f c1	 = sampler->ReadPixel(faceTexture.get(), uv, lod1);

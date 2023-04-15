@@ -20,7 +20,7 @@ struct GBufferData
 	vec3 Position;
 	vec3 Material; // r: metallic, g: roughness, b: Shading Model
 	vec3 EmissiveColor = vec3(0);
-	vec3 AOMask = vec3(1.0f);
+	vec3 AOMask		   = vec3(1.0f);
 };
 
 template<class T>
@@ -81,6 +81,12 @@ FORCEINLINE float D_GGX(float dotNH, float roughness)
 	return (alpha2) / (PI * denom * denom);
 }
 
+// ----------------------------------------------------------------------------
+FORCEINLINE float D_GGX(vec3 N, vec3 H, float roughness)
+{
+	return D_GGX(max(dot(N, H), 0.0f), roughness);
+}
+
 FORCEINLINE float D_GGX2(float roughness, float NdH)
 {
 	return D_GGX(NdH, roughness);
@@ -120,4 +126,35 @@ FORCEINLINE vec3 F_Schlick(float cosTheta, vec3 F0)
 FORCEINLINE vec3 F_SchlickR(float cosTheta, vec3 F0, float roughness)
 {
 	return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(1.0f - cosTheta, 5.0f);
+}
+// ----------------------------------------------------------------------------
+FORCEINLINE float GeometrySchlickGGX(float NdotV, float roughness)
+{
+	float r = (roughness + 1.0f);
+	float k = (r * r) / 8.0f;
+
+	float nom	= NdotV;
+	float denom = NdotV * (1.0f - k) + k;
+
+	return nom / denom;
+}
+// ----------------------------------------------------------------------------
+FORCEINLINE float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
+{
+	float NdotV = max(dot(N, V), 0.0f);
+	float NdotL = max(dot(N, L), 0.0f);
+	float ggx2	= GeometrySchlickGGX(NdotV, roughness);
+	float ggx1	= GeometrySchlickGGX(NdotL, roughness);
+
+	return ggx1 * ggx2;
+}
+
+
+FORCEINLINE vec2 SampleSphericalMap(vec3 v)
+{
+	static const vec2 invAtan = vec2(0.1591f, 0.3183f);
+	vec2			  uv	  = vec2(glm::atan(v.z, v.x), asin(v.y));
+	uv *= invAtan;
+	uv += 0.5;
+	return uv;
 }

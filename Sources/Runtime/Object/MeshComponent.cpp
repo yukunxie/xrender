@@ -9,8 +9,9 @@
 
 #include <math.h>
 
-
-const float PI = M_PI;
+#ifndef PI
+#	define PI 3.1415926535897932384626433832795f
+#endif 
 
 void BindVertexBufferHandle(MeshComponent* meshComp, VertexBufferAttriKind kind, InputAttributeFormat format, const void* data, uint32 size)
 {

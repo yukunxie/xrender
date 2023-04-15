@@ -210,7 +210,7 @@ namespace GLTFLoader
 					indices[i] = pIndices[i];
 				}
 			}
-			mc->Geometry_->GetIndexBuffer()->InitData(indices.data(), accessor.count * sizeof(int));
+			mc->Geometry_->InitIndexBufferData(indices.data(), accessor.count * sizeof(int));
 
 			// generate tangent and bitangent
 			if (useNormapMap && !(mc->GetGeometry()->HasBiTangent() && mc->GetGeometry()->HasTangent()))

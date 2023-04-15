@@ -29,7 +29,7 @@ typedef std::vector<std::uint8_t> TData;
 
 #ifdef _DEBUG
 #	ifndef Assert
-#		define Assert(cond, format, ...) assert(cond)
+#		define Assert(cond, ...) assert(cond)
 #	endif
 //#define Assert(cond, format, ...)  do {if (!(cond)) AssertImpl(__FILE__, "", __LINE__, format, ##__VA_ARGS__); } while(0)
 #else

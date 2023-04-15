@@ -89,74 +89,19 @@ static Color4f _ProcessRayHitResult(PhysicalImage* renderTarget, PBRRender& pbrR
 	{
 		auto  meshProxy = GMeshComponentProxies[geomID];
 
+		Material* material = meshProxy->GetMaterial();
+
 		float u = uv.x;
 		float v = uv.y;
 
 		uint32 v0, v1, v2;
 		std::tie(v0, v1, v2) = meshProxy->GetGeometry()->GetIndexBuffer()->GetVerticesByPrimitiveId(primID);
 
-		Vector2f uv0 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector2f>(VertexBufferAttriKind::TEXCOORD, v0);
-		Vector2f uv1 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector2f>(VertexBufferAttriKind::TEXCOORD, v1);
-		Vector2f uv2 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector2f>(VertexBufferAttriKind::TEXCOORD, v2);
+		const VertexOutputData& vertexData = RenderCore::InterpolateAttributes(vec2(u, v), meshProxy->GetGeometry(), primID);
 
-		Vector3f n0 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::NORMAL, v0);
-		Vector3f n1 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::NORMAL, v1);
-		Vector3f n2 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::NORMAL, v2);
+		return material->GetRenderCore()->Execute(cGlobalBuffer, cBatchBuffer, vertexData, material);
 
-		Vector3f p0 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::POSITION, v0);
-		Vector3f p1 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::POSITION, v1);
-		Vector3f p2 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::POSITION, v2);
-
-		n0 = glm::normalize(n0);
-		n1 = glm::normalize(n1);
-		n2 = glm::normalize(n2);
-
-#if 1
-		float s			= 1 - u - v;
-#else
-		float s			= 1 - u - v;
-		float ss		= s;
-		s				= v;
-		v				= u;
-		u				= ss;
-#endif
-
-#if 0
-		Vector2f uv		= uv0 * u + uv1 * v + uv2 * (1.0f - u - v);
-		Vector3f normal = glm::normalize(n0) * u + glm::normalize(n1) * v + glm::normalize(n2) * (1.0f - u - v);
-		Vector3f pos	= u * p0 + v * p1 + (1-u - v) * p2;
-#else
-		Vector2f uv		= u * uv0 + v * uv1 + s * uv2;
-		Vector3f normal = u * n0 + v * n1 + s * n2;
-		Vector3f pos	= u * p0 + v * p1 + s * p2;
-#endif
-
-		normal = glm::normalize(normal);
-
-		glm::mat3 normalMatrix = glm::mat3(1);
-		if (meshProxy->GetGeometry()->HasBiTangent() && meshProxy->GetGeometry()->HasTangent())
-		{
-			Vector3f t0 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::TANGENT, v0);
-			Vector3f t1 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::TANGENT, v1);
-			Vector3f t2 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::TANGENT, v2);
-
-			Vector3f  b0		   = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::BITANGENT, v0);
-			Vector3f  b1		   = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::BITANGENT, v1);
-			Vector3f  b2		   = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::BITANGENT, v2);
-
-			Vector3f T = u * t0 + t1 * v + t2 * s;
-			Vector3f B = u * b0 + b1 * v + b2 * s;
-
-			glm::mat3 tbnMatrix	   = glm::mat3(T, B, normal);
-			glm::mat3 invTBNMatrix = glm::inverse(tbnMatrix);
-			normalMatrix = glm::transpose(invTBNMatrix);
-		}
-
-		auto material = meshProxy->GetMaterial();
-
-		Color4f frag = pbrRender.Render(cGlobalBuffer, cBatchBuffer, cShadingBuffer, pos, normal, uv, normalMatrix, material);
-
-		return frag;
+		
 	}
 	else
 	{
@@ -183,10 +128,6 @@ void RTRender(Vector3f pos, Vector3f foucs, Vector3f up, float fov, PhysicalImag
 	SCOPED_PROFILING_GUARD("RayTracingRender");
 	int		 width	= renderTarget->GetWidth();
 	int		 height = renderTarget->GetHeight();
-
-	//Vector3f pos   = { 10.0f, 0.0f, 0.0f };
-	//Vector3f foucs = { 0.0f, 0.0f, 0.0f };
-	//Vector3f up	   = { 0, 1, 0 };
 
 	embree::Camera camera;
 	camera.from		  = embree::Vec3fa(pos.x, pos.y, pos.z);

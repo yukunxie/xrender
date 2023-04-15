@@ -3,13 +3,29 @@
 
 #include "Types.h"
 #include "Texture.h"
+#include "Renderer/ShadingBase.h"
 #include <map>
+
+
+class MeshComponent;
+class Geometry;
+class Material;
+
+struct EnvironmentTextures
+{
+	TexturePtr EnvTexture;
+	TexturePtr BRDFTexture;
+	TexturePtr SphericalEnvTexture;
+	TexturePtr IrradianceTexture;
+};
+
+EnvironmentTextures* GetEnvironmentData();
 
 struct MaterialParameter
 {
 	std::string			   Name;
 	MaterialParameterType  Format;
-	std::unique_ptr<uint8> Data;
+	std::vector<uint8> Data;
 };
 
 struct LightData
@@ -28,14 +44,6 @@ struct GlobalConstantBuffer
 	std::vector<LightData> Lights;
 };
 
-struct EnvironmentTextures
-{
-	TexturePtr EnvTexture;
-	TexturePtr BRDFTexture;
-	TexturePtr SphericalEnvTexture;
-	TexturePtr IrradianceTexture;
-};
-
 struct ShadingBuffer
 {
 	Vector4f emissiveFactor;
@@ -44,15 +52,80 @@ struct ShadingBuffer
 	float	 roughnessFactor;
 };
 
+struct VertexOutputData
+{
+	bool HasTexcoord  = false;
+	bool HasNormal	  = false;
+	bool HasTangent	  = false;
+	bool HasBiTangent = false;
+
+	vec3 Position;
+	vec2 Texcoord0;
+	vec3 Normal;
+	vec3 Tangent;
+	vec3 BiTangent;
+};
+
 struct BatchBuffer
 {
 	TMat4x4 WorldMatrix;
 };
 
+class RenderCore
+{
+public:
+	virtual ~RenderCore()
+	{
+	}
+
+public:
+	template<typename AttrType>
+	FORCEINLINE AttrType InterpolateAttribute(vec2 barycenter, const AttrType& p0, const AttrType& p1, const AttrType& p2)
+	{
+		return barycenter.x * p1 + barycenter.y * p2 + (1.0f - barycenter.x - barycenter.y) * p2;
+	}
+
+	static VertexOutputData InterpolateAttributes(vec2 barycenter, const Geometry* mesh, int primId) noexcept;
+
+public:
+	virtual Color4f Execute(const GlobalConstantBuffer& cGlobalBuffer,
+							const BatchBuffer&			cBatchBufferconst,
+							const VertexOutputData&		vertexData,
+							class Material*				material) noexcept = 0;
+};
+
+class RenderCorePBR : public RenderCore
+{
+public:
+	Color4f Execute(const GlobalConstantBuffer& cGlobalBuffer, 
+					const BatchBuffer& cBatchBufferconst,
+					const VertexOutputData& vertexData, 
+					class Material* material) noexcept override;
+
+protected:
+	Color4f Shading(const GlobalConstantBuffer& cGlobalBuffer
+					, const GBufferData& gBufferData
+					, const EnvironmentTextures& gEnvironmentData) const noexcept;
+};
+
+class RenderCoreSkybox : public RenderCore
+{
+public:
+	Color4f Execute(const GlobalConstantBuffer& cGlobalBuffer,
+					const BatchBuffer&			cBatchBufferconst,
+					const VertexOutputData&		vertexData,
+					class Material*				material) noexcept override
+	{
+	}
+};
+
+typedef std::shared_ptr<RenderCore> RenderCorePtr;
+
 
 class Material
 {
 public:
+	Material();
 	Material(const std::string& configFilename = "");
 
 	bool SetFloat(const std::string& name, std::uint32_t offset, std::uint32_t count, const float* data);
@@ -65,7 +138,27 @@ public:
 		return it != mTextures.end() ? it->second : nullptr;
 	}
 
+	void SetRenderCore(const RenderCorePtr& renderCore)
+	{
+		mRenderCore = renderCore;
+	}
+
+	const RenderCorePtr& GetRenderCore() const
+	{
+		return mRenderCore;
+	}
+
+	ShadingBuffer GetShadingBuffer() const;
+
+	float GetFloat(const std::string& name) const;
+	vec2 GetVec2(const std::string& name) const;
+	vec3 GetVec3(const std::string& name) const;
+	vec4 GetVec4(const std::string& name) const;
+
 public:
 	std::map<std::string, MaterialParameter> mParameters;
-	std::map<std::string, TexturePtr> mTextures;
+	std::map<std::string, TexturePtr>		 mTextures;
+
+protected:
+	RenderCorePtr mRenderCore;
 };

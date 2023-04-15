@@ -44,12 +44,12 @@ struct IndexBuffer
 		}
 	}
 
-	std::uint32_t GetIndexCount()
+	std::uint32_t GetIndexCount() const
 	{
 		return buffer.size() / (indexType == IndexType::UINT32 ? 4 : 2);
 	}
 
-	std::tuple<uint32, uint32, uint32> GetVerticesByPrimitiveId(uint32 primId)
+	std::tuple<uint32, uint32, uint32> GetVerticesByPrimitiveId(uint32 primId) const
 	{
 		if (indexType == IndexType::UINT32)
 		{

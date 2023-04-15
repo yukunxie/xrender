@@ -34,91 +34,10 @@
 #include "Loader/GLTFLoader.h"
 #include "XRenderer.h"
 #include "Renderer/PBRRender.h"
+#include "Graphics/Material.h"
 #include "RTRender.h"
 
-// std::map<int, RTCMeshProxy*> GMeshProxies;
 std::map<int, MeshComponent*> GMeshComponentProxies;
-
-
-/* adds a cube to the scene */
-unsigned int addCube(RTCDevice device_i, RTCScene scene_i, const Vector3f& pos)
-{
-	/* create a triangulated cube with 12 triangles and 8 vertices */
-	RTCGeometry mesh = rtcNewGeometry(device_i, RTC_GEOMETRY_TYPE_TRIANGLE);
-
-	std::vector<Vector3f>	  cubeVertices;
-	std::vector<Vector3f>	  cubeNormals;
-	std::vector<Vector2f>	  cubeUVs;
-	std::vector<unsigned int> cubeIndices;
-	GenerateCube(cubeVertices,
-				 cubeNormals,
-				 cubeUVs,
-				 cubeIndices);
-
-	Vector3f* vert = (Vector3f*)rtcSetNewGeometryBuffer(mesh, RTC_BUFFER_TYPE_VERTEX, 0, RTC_FORMAT_FLOAT3, sizeof(Vector3f), cubeVertices.size());
-	memcpy(vert, cubeVertices.data(), sizeof(cubeVertices[0]) * cubeVertices.size());
-
-	unsigned int* index = (unsigned int*)rtcSetNewGeometryBuffer(mesh, RTC_BUFFER_TYPE_INDEX, 0, RTC_FORMAT_UINT3, 3 * sizeof(unsigned int), cubeIndices.size() / 3);
-	memcpy(index, cubeIndices.data(), sizeof(cubeIndices[0]) * cubeIndices.size());
-
-
-	/*AffineSpace3fa transform = embree::one;
-	transform				 = transform.translate(pos).scale({3.0f, 3.0f, 3.0f});
-	rtcSetGeometryTransform(mesh, 0, RTC_FORMAT_FLOAT4X4_COLUMN_MAJOR, &transform);*/
-
-	rtcCommitGeometry(mesh);
-
-	unsigned int geomID = rtcAttachGeometry(scene_i, mesh);
-	// GMeshProxies[geomID] = new RTCMeshProxy(cubeUVs, cubeNormals, cubeIndices);
-	std::cout << "AddCube geomID=" << geomID << std::endl;
-
-
-	rtcReleaseGeometry(mesh);
-	return geomID;
-}
-
-unsigned int addSphere(RTCDevice device_i, RTCScene scene_i, const Vector3f& pos)
-{
-	int						  radius	 = 2;
-	int						  latitudes	 = 32;
-	int						  longitudes = 32;
-	std::vector<Vector3f>	  sphereVertices;
-	std::vector<Vector3f>	  sphereNormals;
-	std::vector<Vector2f>	  sphereUVs;
-	std::vector<unsigned int> sphereIndices;
-	GenerateSphereSmooth(radius,
-						 latitudes,
-						 longitudes,
-						 sphereVertices,
-						 sphereNormals,
-						 sphereUVs,
-						 sphereIndices);
-
-	RTCGeometry mesh = rtcNewGeometry(device_i, RTC_GEOMETRY_TYPE_TRIANGLE);
-
-	Vector3f* vert = (Vector3f*)rtcSetNewGeometryBuffer(mesh, RTC_BUFFER_TYPE_VERTEX, 0, RTC_FORMAT_FLOAT3, sizeof(Vector3f), sphereVertices.size());
-	memcpy(vert, sphereVertices.data(), sizeof(sphereVertices[0]) * sphereVertices.size());
-
-	// Vector3f* norm = (Vector3f*)rtcSetNewGeometryBuffer(mesh, RTC_BUFFER_TYPE_NORMAL, 1, RTC_FORMAT_FLOAT3, sizeof(Vector3f), sphereNormals.size());
-	// memcpy(norm, sphereNormals.data(), sizeof(Vector3f) * sphereNormals.size());
-
-	//   Vector2f* uv = (Vector2f*)rtcSetNewGeometryBuffer(mesh, RTC_BUFFER_TYPE_VERTEX_ATTRIBUTE, 2, RTC_FORMAT_FLOAT2, sizeof(Vector2f), sphereUVs.size());
-	// memcpy(uv, sphereUVs.data(), sizeof(Vector2f) * sphereUVs.size());
-
-	unsigned int* index = (unsigned int*)rtcSetNewGeometryBuffer(mesh, RTC_BUFFER_TYPE_INDEX, 0, RTC_FORMAT_UINT3, 3 * sizeof(unsigned int), sphereIndices.size() / 3);
-	memcpy(index, sphereIndices.data(), sizeof(sphereIndices[0]) * sphereIndices.size());
-
-	rtcCommitGeometry(mesh);
-
-	unsigned int geomID = rtcAttachGeometry(scene_i, mesh);
-
-	std::cout << "AddSphere geomID=" << geomID << std::endl;
-	// GMeshProxies[geomID] = new RTCMeshProxy(sphereUVs, sphereNormals, sphereIndices);
-
-	// rtcReleaseGeometry(mesh);
-	return geomID;
-}
-
 
 void AddEntityToEmbreeScene(RTCDevice device_i, RTCScene scene_i, const std::vector<Entity*>& entities)
 {
@@ -128,12 +47,24 @@ void AddEntityToEmbreeScene(RTCDevice device_i, RTCScene scene_i, const std::vec
 	}
 }
 
-int width  = 2048;
-int height = 2048;
+int width  = 1024;
+int height = 1024;
 
 int main()
 {
-	
+	// init global texturs;
+	{
+		EnvironmentTextures* envTextures = GetEnvironmentData();
+		envTextures->BRDFTexture = std::make_shared<Texture2D>("Engine/lutBRDF.png");
+		/*PhysicalImage32F image("Textures/hdr/newport_loft.hdr");
+		mEnvTexture = PrefilterEnvironmentTexture(image);*/
+		envTextures->EnvTexture = std::make_shared<TextureCube>("SkyBox0");
+
+		envTextures->IrradianceTexture = std::make_shared<TextureCube>("PreIrradiance0");
+
+		envTextures->SphericalEnvTexture = std::make_shared<Texture2D>("Textures/hdr/newport_loft.hdr");
+		envTextures->SphericalEnvTexture->AutoGenerateMipmaps();
+	}
 
 	RTCDevice device = rtcNewDevice("tri_accel=bvh4.triangle4v");
 
@@ -151,45 +82,33 @@ int main()
 		Entity* skybox	 = new Entity();
 		skybox->AddComponment(cubeMesh);
 		std::vector<Entity*> entities = { skybox };
-		AddEntityToEmbreeScene(device, scene, entities);
+		//AddEntityToEmbreeScene(device, scene, entities);
 	}
-
-	//{
-	//	auto	cubeMesh = MeshComponentBuilder::CreateSphere("");
-	//	Entity* skybox	 = new Entity();
-	//	skybox->AddComponment(cubeMesh);
-	//	std::vector<Entity*> entities = { skybox };
-	//	AddEntityToEmbreeScene(device, scene, entities);
-	//}
 
 	{
 		// auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Models/deer.gltf");
 		// auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Models/color_teapot_spheres.gltf");
-		// auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Scenes/Sponza/Sponza.gltf");
+		 auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Scenes/Sponza/Sponza.gltf");
 		// auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Scenes/cornellbox/cornellBox-2.80-Eevee-gltf.gltf");
-		auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Models/DamagedHelmet/glTF-Embedded/DamagedHelmet.gltf");
+		//auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Models/DamagedHelmet/glTF-Embedded/DamagedHelmet.gltf");
 		AddEntityToEmbreeScene(device, scene, gltfSceneEntities);
 	}
-	
 
-	/*PhysicalImage32F image("Textures/hdr/newport_loft.hdr");
-	PrefilterEnvironmentTexture(image);*/
-
-
-	// addHair(device, scene);
-
-	// addCube(device, scene, Vec3fa(-1, 0, 0));
-	// addCube(device, scene, Vec3fa(1, 0, 0));
-	// addCube(device, scene, Vec3fa(0, 0, -1));
-	// addCube(device, scene, Vec3fa(0, 0, 1));
-	// addCube(device, scene, Vec3fa(0, 5, 5));
-	// addSphere(device, scene, Vec3fa(0, 0, 0));
+	{
+		 auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Models/deer.gltf");
+		// auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Models/color_teapot_spheres.gltf");
+		//auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Scenes/Sponza/Sponza.gltf");
+		// auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Scenes/cornellbox/cornellBox-2.80-Eevee-gltf.gltf");
+		 //auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Models/DamagedHelmet/glTF-Embedded/DamagedHelmet.gltf");
+		AddEntityToEmbreeScene(device, scene, gltfSceneEntities);
+	}
 
 	rtcCommitScene(scene);
 
 	RTCRayHit rayhit;
 
-	Vector3f pos   = { -3, 5.0f, -3.0f };
+	//Vector3f pos   = { -3, 5.0f, -3.0f };
+	Vector3f pos   = { 50, 10.0f, 0.0f };
 	Vector3f focus = { .0f, 0.0f, 0.0f };
 	Vector3f up	   = { 0, 1, 0 };
 	float	 fov   = 60;

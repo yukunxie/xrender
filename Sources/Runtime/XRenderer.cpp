@@ -192,8 +192,8 @@ int Renderer(const PhysicalImage* renderTarget, const std::function<void(float, 
 {
 	GMouseMoveHandler		= mouseMoveHandler;
 
-	const uint32 SCR_WIDTH	= renderTarget->GetWidth();
-	const uint32 SCR_HEIGHT = renderTarget->GetHeight();
+	const uint32 SCR_WIDTH	= renderTarget->GetWidth()/2;
+	const uint32 SCR_HEIGHT = renderTarget->GetHeight()/2;
 	// glfw: initialize and configure
 	// ------------------------------
 	glfwInit();

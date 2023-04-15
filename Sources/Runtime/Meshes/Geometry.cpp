@@ -49,7 +49,7 @@ void Geometry::AppendVertexBuffer(VertexBuffer* buffer)
 //	return { 0.0f, 0.0f };
 //}
 
-bool Geometry::HasTangent()
+bool Geometry::HasTangent() const
 {
     for (const auto& vb : vbStreams_)
     {
@@ -59,7 +59,7 @@ bool Geometry::HasTangent()
     return false;
 }
 
-bool Geometry::HasBiTangent()
+bool Geometry::HasBiTangent() const
 {
     for (const auto& vb : vbStreams_)
     {
