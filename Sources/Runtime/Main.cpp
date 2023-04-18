@@ -78,11 +78,11 @@ int main()
 	// Add Sky box
 	{
 		//auto	cubeMesh = MeshComponentBuilder::CreateBox("", Vector3f(1000.0f));
-		auto	cubeMesh = MeshComponentBuilder::CreateSkyBox(Vector3f(1000.0f));
+		auto	cubeMesh = MeshComponentBuilder::CreateSkyBox(Vector3f(10000.0f));
 		Entity* skybox	 = new Entity();
 		skybox->AddComponment(cubeMesh);
 		std::vector<Entity*> entities = { skybox };
-		//AddEntityToEmbreeScene(device, scene, entities);
+		AddEntityToEmbreeScene(device, scene, entities);
 	}
 
 	{
@@ -102,6 +102,7 @@ int main()
 		 //auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Models/DamagedHelmet/glTF-Embedded/DamagedHelmet.gltf");
 		AddEntityToEmbreeScene(device, scene, gltfSceneEntities);
 	}
+
 
 	rtcCommitScene(scene);
 
@@ -192,7 +193,7 @@ int main()
 		/*std::thread rtRenderThread([&pbrRender, &renderImage, &pos, &focus, &up, &fov, &scene]()
 								   { RTRender(pos, focus, up, fov, &renderImage, scene, pbrRender); });*/
 
-		//RTRender(pos, focus, up, fov, &renderImage, scene, pbrRender);
+		RTRender(pos, focus, up, fov, &renderImage, scene, pbrRender);
 	};
 
 	Renderer(&renderImage, mouse_callback);

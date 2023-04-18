@@ -192,8 +192,10 @@ int Renderer(const PhysicalImage* renderTarget, const std::function<void(float, 
 {
 	GMouseMoveHandler		= mouseMoveHandler;
 
-	const uint32 SCR_WIDTH	= renderTarget->GetWidth()/2;
-	const uint32 SCR_HEIGHT = renderTarget->GetHeight()/2;
+	const uint32 SCR_WIDTH = 1024;
+	//renderTarget->GetWidth();
+	const uint32 SCR_HEIGHT = 1024;
+	//renderTarget->GetHeight();
 	// glfw: initialize and configure
 	// ------------------------------
 	glfwInit();
@@ -217,24 +219,26 @@ int Renderer(const PhysicalImage* renderTarget, const std::function<void(float, 
 	glfwMakeContextCurrent(window);
 	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
-	////使窗口隐藏光标并且捕捉它
-	//glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-	////使用回调
-	//glfwSetCursorPosCallback(window, [](GLFWwindow* window, double xpos, double ypos)
-	//						 {
-	//							if (firstMouse) // 这个bool变量初始时是设定为true的
-	//							{
-	//								lastX	   = xpos;
-	//								lastY	   = ypos;
-	//								firstMouse = false;
-	//								//        return;
-	//							}
-	//							float xoffset = xpos - lastX;
-	//							float yoffset = lastY - ypos;
-	//							lastX		  = xpos;
-	//							lastY		  = ypos; 
-	//							GMouseMoveHandler(xoffset, yoffset);
-	//						 });
+#if 0
+	//使窗口隐藏光标并且捕捉它
+	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	//使用回调
+	glfwSetCursorPosCallback(window, [](GLFWwindow* window, double xpos, double ypos)
+							 {
+								if (firstMouse) // 这个bool变量初始时是设定为true的
+								{
+									lastX	   = xpos;
+									lastY	   = ypos;
+									firstMouse = false;
+									//        return;
+								}
+								float xoffset = xpos - lastX;
+								float yoffset = lastY - ypos;
+								lastX		  = xpos;
+								lastY		  = ypos; 
+								GMouseMoveHandler(xoffset, yoffset);
+							 });
+#endif
 
 	// glad: load all OpenGL function pointers
 	// ---------------------------------------

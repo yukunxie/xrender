@@ -15,6 +15,8 @@ class Geometry;
 class MeshComponent : public Component
 {
 public:
+	MeshComponent();
+
 	Material* GetMaterial() const
 	{
 		return Material_;
@@ -57,6 +59,11 @@ public:
 
 	void SetPhysicsData(void* data) { PhysicsData_ = data; }
 
+	Vector3f GetDebugColor() const
+	{
+		return MeshDebugColor_;
+	}
+
 public:
 	Material*		Material_	= nullptr;
 	::Geometry*		Geometry_	= nullptr;
@@ -68,6 +75,7 @@ public:
 
 private:
 	std::uint64_t RenderSetBits_ = ERenderSet_Opaque;
+	Vector3f	  MeshDebugColor_;
 };
 
 class MeshComponentBuilder

@@ -22,6 +22,33 @@ void BindVertexBufferHandle(MeshComponent* meshComp, VertexBufferAttriKind kind,
 	meshComp->GetGeometry()->AppendVertexBuffer(vbBuffer);
 };
 
+Vector3f RandomColor()
+{
+	float r = static_cast<float>(rand()) / static_cast<float>(RAND_MAX); // 生成0到1之间的随机数
+	float g = static_cast<float>(rand()) / static_cast<float>(RAND_MAX); // 生成0到1之间的随机数
+	float b = static_cast<float>(rand()) / static_cast<float>(RAND_MAX); // 生成0到1之间的随机数
+
+	// 计算颜色的灰度值
+	float gray = (r * 0.3) + (g * 0.59) + (b * 0.11);
+
+	// 根据灰度值调整颜色的亮度和对比度
+	r = (r - gray) * 3.0;
+	g = (g - gray) * 3.0;
+	b = (b - gray) * 3.0;
+
+	// 确保颜色值在0到1之间
+	r = glm::clamp(r, 0.0f, 1.0f);
+	g = glm::clamp(g, 0.0f, 1.0f);
+	b = glm::clamp(b, 0.0f, 1.0f);
+
+	return Vector3f(r, g, b); // 返回随机颜色向量
+}
+
+MeshComponent::MeshComponent()
+{
+	MeshDebugColor_ = RandomColor();
+}
+
 MeshComponent::~MeshComponent()
 {
 	/*if (Engine::GetWorld()->CurrentSelectedMeshComponent == this)

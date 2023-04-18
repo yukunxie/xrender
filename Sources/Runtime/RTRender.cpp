@@ -83,11 +83,17 @@ Vector3f interpolateNormal(float u, float v, Vector3f p0, Vector3f p1, Vector3f 
 
 static Color4f _ProcessRayHitResult(PhysicalImage* renderTarget, PBRRender& pbrRender, const GlobalConstantBuffer& cGlobalBuffer, const BatchBuffer& cBatchBuffer, const ShadingBuffer& cShadingBuffer, vec3 viewDir, vec2 uv, int geomID, int primID)
 {
-	Assert(geomID != RTC_INVALID_GEOMETRY_ID);
+	//Assert(geomID != RTC_INVALID_GEOMETRY_ID);
 
-	if (geomID != 0)
+	if (geomID == RTC_INVALID_GEOMETRY_ID)
+	{
+		return Color4f(1.0f, 0.0f, 1.0f, 1.0f);
+	}
+	else if (geomID != 0)
 	{
 		auto  meshProxy = GMeshComponentProxies[geomID];
+
+		//return Color4f(meshProxy->GetDebugColor(), 1.0f);
 
 		Material* material = meshProxy->GetMaterial();
 
@@ -103,7 +109,7 @@ static Color4f _ProcessRayHitResult(PhysicalImage* renderTarget, PBRRender& pbrR
 
 		
 	}
-	else
+	else if (geomID == 0)
 	{
 		auto meshProxy = GMeshComponentProxies[geomID];
 
@@ -183,7 +189,142 @@ void RTRender(Vector3f pos, Vector3f foucs, Vector3f up, float fov, PhysicalImag
 #	define RTC_ARRAY_PREFIX(ARGS) ARGS
 #endif
 
-	constexpr int NUM_CORE = 8;
+	struct TileData
+	{
+		uint16 SW = 0; // start of height;
+		uint16 SH = 0; // start of height;
+	};
+
+	std::vector<TileData> renderTiles;
+	std::atomic_uint32_t  renderTileIndex = 0;
+
+	constexpr int TileSize = 32;
+	constexpr int NUM_CORE = 16;
+
+	for (uint16 h = 0; h < height; h += TileSize)
+	{
+		for (uint16 w = 0; w < width; w += TileSize)
+		{
+			renderTiles.emplace_back(w, h);
+		}
+	}
+
+	ShadingBuffer cShadingBuffer;
+	{
+		cShadingBuffer.baseColorFactor = Vector4f(1.0f);
+		cShadingBuffer.emissiveFactor  = Vector4f(0.0f);
+		cShadingBuffer.metallicFactor  = 0.0f;
+		cShadingBuffer.roughnessFactor = 0.5f;
+	}
+
+#if 1
+
+	int count = 0;
+
+	#pragma omp parallel for num_threads(NUM_CORE) reduction(+:count)
+	for (int taskId = 0; taskId < NUM_CORE; ++taskId)
+	{
+		do
+		{
+			std::vector<std::pair<int, int>> pixels;
+			pixels.clear();
+
+			uint32 taskIdx = renderTileIndex.fetch_add(1, std::memory_order_acq_rel);
+			if (taskIdx >= renderTiles.size())
+			{
+				break;
+			}
+			
+			const auto& tileData = renderTiles[taskIdx];
+			for (int h = tileData.SH; h < tileData.SH + TileSize; ++h)
+			{
+				for (int w = tileData.SW; w < tileData.SW + TileSize; ++w)
+				{
+					if (h < height && w < width)
+					{
+						pixels.emplace_back(w, h);
+					}
+				}
+			}
+
+			count += pixels.size();
+
+			for (int t = 0; t < pixels.size(); t += HITBOCKSIZE)
+			{
+#if HITBOCKSIZE == 8
+				RTCRayHit8 rayhits;
+#elif HITBOCKSIZE == 4
+				RTCRayHit4 rayhits;
+#elif HITBOCKSIZE == 1
+				RTCRayHit rayhits;
+#else
+				Assert(false);
+#endif
+
+				for (int b = 0; b < HITBOCKSIZE; ++b)
+				{
+					if (b + t < pixels.size())
+					{
+						int w = pixels[b + t].first;
+						int h = pixels[b + t].second;
+
+						validMasks[b] = 0xFFFFFFFF;
+
+						auto dir = embree::Vec3fa(embree::normalize(w * ispcCamera.xfm.l.vx + h * ispcCamera.xfm.l.vy + ispcCamera.xfm.l.vz));
+						RTC_ARRAY_PREFIX(rayhits.ray.org_x)[b]  = ispcCamera.xfm.p.x;
+						RTC_ARRAY_PREFIX(rayhits.ray.org_y)[b]  = ispcCamera.xfm.p.y;
+						RTC_ARRAY_PREFIX(rayhits.ray.org_z)[b]  = ispcCamera.xfm.p.z;
+						RTC_ARRAY_PREFIX(rayhits.ray.dir_x)[b]  = dir.x;
+						RTC_ARRAY_PREFIX(rayhits.ray.dir_y)[b]  = dir.y;
+						RTC_ARRAY_PREFIX(rayhits.ray.dir_z)[b]  = dir.z;
+						RTC_ARRAY_PREFIX(rayhits.ray.tnear)[b]  = 0.f;
+						RTC_ARRAY_PREFIX(rayhits.ray.tfar)[b]	  = 100000;
+						RTC_ARRAY_PREFIX(rayhits.ray.time)[b]	   = HITBOCKSIZE;
+						RTC_ARRAY_PREFIX(rayhits.ray.mask)[b]	  = 0xFFFFFFFF;
+						RTC_ARRAY_PREFIX(rayhits.hit.geomID)[b]  = RTC_INVALID_GEOMETRY_ID;
+					}
+					else
+					{
+						validMasks[b] = 0x0;
+					}
+				}
+#if HITBOCKSIZE == 8
+				rtcIntersect8(validMasks, scene, &rayhits);
+#elif HITBOCKSIZE == 4
+				rtcIntersect4(validMasks, scene, &rayhits);
+#elif HITBOCKSIZE == 1
+				rtcIntersect1(scene, &rayhits);
+#else
+				Assert(false);
+#endif
+
+				for (int b = 0; b < HITBOCKSIZE; ++b)
+				{
+					int	  w = pixels[b + t].first;
+					int	  h = pixels[b + t].second;
+
+					float x = RTC_ARRAY_PREFIX(rayhits.ray.dir_x)[b];
+					float y = RTC_ARRAY_PREFIX(rayhits.ray.dir_y)[b];
+					float z = RTC_ARRAY_PREFIX(rayhits.ray.dir_z)[b];
+
+					// The triange is CCW£¬ so we need to invert the u and v
+					float v = RTC_ARRAY_PREFIX(rayhits.hit.u)[b];
+					float u = RTC_ARRAY_PREFIX(rayhits.hit.v)[b];
+
+					int		primID = RTC_ARRAY_PREFIX(rayhits.hit.primID)[b];
+					int		geomID = RTC_ARRAY_PREFIX(rayhits.hit.geomID)[b];
+					Color4f frag   = _ProcessRayHitResult(renderTarget, pbrRender, cGlobalBuffer, cBatchBuffer, cShadingBuffer, vec3(x, y, z), vec2(u, v), geomID, primID);
+					renderTarget->WritePixel(w, h, frag);
+				}
+			}
+		} while (1);
+		
+	}
+
+	std::cout << "total pixel:" << count << std::endl;
+
+#else
+	
 #pragma omp parallel for num_threads(NUM_CORE)
 	for (int h = 0; h < height; ++h)
 	{
@@ -254,4 +395,5 @@ void RTRender(Vector3f pos, Vector3f foucs, Vector3f up, float fov, PhysicalImag
 			}
 		}
 	}
+#endif // #if 1
 }
