@@ -90,6 +90,26 @@ namespace GLTFLoader
 					mc->Material_->SetFloat("emissiveFactor", 0, std::min(3, (int)tmp.size()), tmp.data());
 				}
 
+				if (tMaterial.alphaMode.empty() || tMaterial.alphaMode == "OPAQUE")
+				{
+					mc->Material_->SetAlphaMode(EAlphaMode_Opaque);
+				}
+				else if (tMaterial.alphaMode == "BLEND")
+				{
+					mc->Material_->SetAlphaMode(EAlphaMode_Blend);
+				}
+				else if(tMaterial.alphaMode == "MASK")
+				{
+					mc->Material_->SetAlphaMode(EAlphaMode_Mask);
+				}
+				else 
+				{
+					Assert(false);
+				}
+
+				mc->Material_->SetAlphaCutoff((float)tMaterial.alphaCutoff);
+				mc->Material_->SetDoubleSide(tMaterial.doubleSided);
+
 				const tinygltf::PbrMetallicRoughness& pbrMetallicRoughness = tMaterial.pbrMetallicRoughness;
 				{
 					pbrMetallicRoughness.baseColorFactor.size();

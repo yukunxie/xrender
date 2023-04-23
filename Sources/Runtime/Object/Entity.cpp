@@ -88,6 +88,14 @@ extern std::map<int, MeshComponent*> GMeshComponentProxies;
 
 void Entity::AddToEmbreeScene(RTCDevice device_i, RTCScene scene_i)
 {
+	for (auto child : Children_)
+	{
+		if (child)
+		{
+			child->AddToEmbreeScene(device_i, scene_i);
+		}
+	}
+
 	for (auto component : Components_)
 	{
 		auto meshComponent = dynamic_cast<MeshComponent*>(component);
@@ -166,5 +174,7 @@ void Entity::AddToEmbreeScene(RTCDevice device_i, RTCScene scene_i)
 
 		GMeshComponentProxies[geomID] = meshComponent;
 	}
+
+	
     
 }

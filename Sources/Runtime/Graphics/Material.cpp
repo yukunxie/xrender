@@ -113,10 +113,22 @@ VertexOutputData RenderCore::InterpolateAttributes(vec2 barycenter, const Geomet
 	std::tie(v0, v1, v2) = mesh->GetIndexBuffer()->GetVerticesByPrimitiveId(primId);
 
 	Vector3f p0, p1, p2;
-	std::tie(p0, p1, p2) = mesh->GetTripleAttributesByIndex<Vector3f>(VertexBufferAttriKind::NORMAL, v0, v1, v2);
+	std::tie(p0, p1, p2) = mesh->GetTripleAttributesByIndex<Vector3f>(VertexBufferAttriKind::POSITION, v0, v1, v2);
 
 	OutputData.Position = u * p0 + v * p1 + s * p2;
 
+	Vector2f uv0, uv1, uv2;
+
+	if (mesh->HasAttribute(VertexBufferAttriKind::TEXCOORD))
+	{
+
+		std::tie(uv0, uv1, uv2) = mesh->GetTripleAttributesByIndex<Vector2f>(VertexBufferAttriKind::TEXCOORD, v0, v1, v2);
+
+		OutputData.Texcoord0   = u * uv0 + v * uv1 + s * uv2;
+		OutputData.HasTexcoord = true;
+	}
+
+#if 1
 	if (mesh->HasAttribute(VertexBufferAttriKind::NORMAL))
 	{
 		Vector3f n0, n1, n2;
@@ -128,45 +140,88 @@ VertexOutputData RenderCore::InterpolateAttributes(vec2 barycenter, const Geomet
 		OutputData.Normal	 = glm::normalize(u * n0 + v * n1 + s * n2);
 		OutputData.HasNormal = true;
 	}
-
-	if (mesh->HasAttribute(VertexBufferAttriKind::TEXCOORD))
-	{
-		Vector2f uv0, uv1, uv2;
-		std::tie(uv0, uv1, uv2) = mesh->GetTripleAttributesByIndex<Vector2f>(VertexBufferAttriKind::TEXCOORD, v0, v1, v2);
-
-		OutputData.Texcoord0   = u * uv0 + v * uv1 + s * uv2;
-		OutputData.HasTexcoord = true;
-	}
-
 	if (mesh->HasAttribute(VertexBufferAttriKind::TANGENT))
 	{
-		Vector3f n0, n1, n2;
-		std::tie(n0, n1, n2) = mesh->GetTripleAttributesByIndex<Vector3f>(VertexBufferAttriKind::TANGENT, v0, v1, v2);
-		n0					 = glm::normalize(n0);
-		n1					 = glm::normalize(n1);
-		n2					 = glm::normalize(n2);
+		Vector3f t0, t1, t2;
+		std::tie(t0, t1, t2) = mesh->GetTripleAttributesByIndex<Vector3f>(VertexBufferAttriKind::TANGENT, v0, v1, v2);
+		t0					 = glm::normalize(t0);
+		t1					 = glm::normalize(t1);
+		t2					 = glm::normalize(t2);
 
-		OutputData.Tangent	  = glm::normalize(u * n0 + v * n1 + s * n2);
+		vec3 T				  = glm::normalize(u * t0 + v * t1 + s * t2);
+		T					  = glm::normalize(T - glm::dot(T, OutputData.Normal) * OutputData.Normal); // 计算切线在法线平面上的投影
+		
 		OutputData.HasTangent = true;
-	}
+		OutputData.Tangent	  = T;
 
-	if (mesh->HasAttribute(VertexBufferAttriKind::BITANGENT))
-	{
-		Vector3f n0, n1, n2;
-		std::tie(n0, n1, n2) = mesh->GetTripleAttributesByIndex<Vector3f>(VertexBufferAttriKind::BITANGENT, v0, v1, v2);
-		n0					 = glm::normalize(n0);
-		n1					 = glm::normalize(n1);
-		n2					 = glm::normalize(n2);
-
-		OutputData.BiTangent	= glm::normalize(u * n0 + v * n1 + s * n2);
+		OutputData.BiTangent = glm::cross(OutputData.Normal, T); // 计算副切线
 		OutputData.HasBiTangent = true;
+
+		//if (mesh->HasAttribute(VertexBufferAttriKind::BITANGENT))
+		//{
+		//	Vector3f n0, n1, n2;
+		//	std::tie(n0, n1, n2) = mesh->GetTripleAttributesByIndex<Vector3f>(VertexBufferAttriKind::BITANGENT, v0, v1, v2);
+		//	n0					 = glm::normalize(n0);
+		//	n1					 = glm::normalize(n1);
+		//	n2					 = glm::normalize(n2);
+
+		//	OutputData.BiTangent	= glm::normalize(u * n0 + v * n1 + s * n2);
+		//	OutputData.HasBiTangent = true;
+		//}
+
 	}
 
+#else
+
+	OutputData.Normal	 = glm::normalize(glm::cross(p1 - p0, p2 - p0));
+	OutputData.HasNormal = true;
+
+	auto	  pos1	   = p0;
+	auto	  pos2	   = p1;
+	auto	  pos3	   = p2;
+	 glm::vec3 edge1	= pos2 - pos1;
+	glm::vec3 edge2	   = pos3 - pos1;
+	glm::vec2 deltaUV1 = uv1 - uv0;
+	glm::vec2 deltaUV2 = uv2 - uv0;
+
+	float f = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
+
+	glm::vec3 tangent1, bitangent1;
+	tangent1.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
+	tangent1.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
+	tangent1.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
+
+	bitangent1.x = f * (-deltaUV2.x * edge1.x + deltaUV1.x * edge2.x);
+	bitangent1.y = f * (-deltaUV2.x * edge1.y + deltaUV1.x * edge2.y);
+	bitangent1.z = f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z);
+
+	OutputData.Tangent	  = tangent1;
+	OutputData.HasTangent = true;
+
+	OutputData.BiTangent	= bitangent1;
+	OutputData.HasBiTangent = true;
+
+	/*if (mesh->HasAttribute(VertexBufferAttriKind::TANGENT))
+	{
+		Vector3f t0, t1, t2;
+		std::tie(t0, t1, t2) = mesh->GetTripleAttributesByIndex<Vector3f>(VertexBufferAttriKind::TANGENT, v0, v1, v2);
+		t0					 = glm::normalize(t0);
+		t1					 = glm::normalize(t1);
+		t2					 = glm::normalize(t2);
+
+		OutputData.Tangent	  = glm::normalize(u * t0 + v * t1 + s * t2);
+		OutputData.HasTangent = true;
+
+		OutputData.BiTangent	= -1.0f * glm::normalize(glm::cross(OutputData.Normal, OutputData.Tangent));
+		OutputData.HasBiTangent = true;
+	}*/
+
+#endif
+	
 	return OutputData;
 }
 
 Color4f RenderCorePBR::Execute(const GlobalConstantBuffer& cGlobalBuffer,
-							   const BatchBuffer&		   cBatchBufferconst,
 							   const VertexOutputData&	   vertexData,
 							   class Material*			   material) noexcept
 {
@@ -181,7 +236,7 @@ Color4f RenderCorePBR::Execute(const GlobalConstantBuffer& cGlobalBuffer,
 
 	static RxSampler* sampler = RxSampler::CreateSampler(RxSamplerType::Linear, RxWrapMode::Repeat);
 	Color3f			  EmissiveColor(0.0f);
-	Color3f			  AOColor(0.0f);
+	Color3f			  AOColor(1.0f);
 	Color3f			  Albedo(cShadingBuffer.baseColorFactor);
 
 	Assert(vertexData.HasNormal);
@@ -195,6 +250,9 @@ Color4f RenderCorePBR::Execute(const GlobalConstantBuffer& cGlobalBuffer,
 		Albedo = Albedo * sampler->ReadPixel(abledoTexture.get(), uv.x, uv.y).xyz;
 	}
 	else 
+	{
+		Albedo = material->GetVec4("baseColorFactor");
+	}
 
 	if (emissiveTexture)
 	{
@@ -215,12 +273,15 @@ Color4f RenderCorePBR::Execute(const GlobalConstantBuffer& cGlobalBuffer,
 	Vector3f viewDir = Vector3f(cGlobalBuffer.EyePos) - vertexPos;
 	viewDir			 = glm::normalize(viewDir);
 
+
 	vec3 N;
 	if (normalTexture)
 	{
 		glm::mat3 normalMatrix = glm::mat3(1);
 		if (vertexData.HasTangent && vertexData.HasBiTangent)
 		{
+			float k = glm::dot(vertexData.Tangent, vertexData.Normal);
+			//Assert( < 0.001f);
 			const Vector3f& T = vertexData.Tangent;
 			const Vector3f& B = vertexData.BiTangent;
 
@@ -228,9 +289,13 @@ Color4f RenderCorePBR::Execute(const GlobalConstantBuffer& cGlobalBuffer,
 			glm::mat3 invTBNMatrix = glm::inverse(tbnMatrix);
 			normalMatrix		   = glm::transpose(invTBNMatrix);
 		}
+		else
+		{
+			Assert(false);
+		}
 
 		vec3 tn = vec3(sampler->ReadPixel(normalTexture.get(), uv.x, uv.y));
-		N		= glm::normalize(normalMatrix * (tn * 2.0f - 1.0f));
+		N		= glm::normalize(normalMatrix * glm::normalize((tn * 2.0f - 1.0f)));
 	}
 	else
 	{
@@ -274,6 +339,37 @@ Color4f RenderCorePBR::Execute(const GlobalConstantBuffer& cGlobalBuffer,
 	return Shading(cGlobalBuffer, gBufferData, *GetEnvironmentData());
 }
 
+vec3 CalculateLight(vec3 albedo, vec3 radiance, vec3 N, vec3 V, vec3 L, vec3 F0, float metallic, float roughness)
+{
+	vec3 H = normalize(V + L);
+
+	// Cook-Torrance BRDF
+	float NDF = D_GGX(N, H, roughness);
+	float G	  = GeometrySmith(N, V, L, roughness);
+	vec3  F	  = F_Schlick(clamp(dot(H, V), 0.0f, 1.0f), F0);
+
+	vec3  numerator	  = NDF * G * F;
+	float denominator = 4.0f * max(dot(N, V), 0.0f) * max(dot(N, L), 0.0f) + 0.0001f; // + 0.0001 to prevent divide by zero
+	vec3  specular	  = numerator / denominator;
+
+	// kS is equal to Fresnel
+	vec3 kS = F;
+	// for energy conservation, the diffuse and specular light can't
+	// be above 1.0 (unless the surface emits light); to preserve this
+	// relationship the diffuse component (kD) should equal 1.0 - kS.
+	vec3 kD = vec3(1.0) - kS;
+	// multiply kD by the inverse metalness such that only non-metals
+	// have diffuse lighting, or a linear blend if partly metal (pure metals
+	// have no diffuse light).
+	kD *= 1.0 - metallic;
+
+	// scale light by NdotL
+	float NdotL = max(dot(N, L), 0.0f);
+
+	// add to outgoing radiance Lo
+	return (kD * albedo / PI + specular) * radiance * NdotL; // note that we already multiplied the BRDF by the Fresnel (kS) so we won't multiply by kS again
+}
+
 Color4f RenderCorePBR::Shading(const GlobalConstantBuffer& cGlobalBuffer, const GBufferData& gBufferData, const EnvironmentTextures& gEnvironmentData) const noexcept
 {
 	vec3  N			= normalize(gBufferData.WorldNormal);
@@ -298,7 +394,7 @@ Color4f RenderCorePBR::Shading(const GlobalConstantBuffer& cGlobalBuffer, const 
 	for (const auto& light : cGlobalBuffer.Lights)
 	{
 		vec3 lightPos	= light.Position;
-		vec3 lightColor = light.Color * 2.0f;
+		vec3 lightColor = light.Color;
 		// calculate per-light radiance
 		vec3  L			  = normalize(lightPos - WorldPos);
 		vec3  H			  = normalize(V + L);
@@ -306,31 +402,39 @@ Color4f RenderCorePBR::Shading(const GlobalConstantBuffer& cGlobalBuffer, const 
 		float attenuation = 1.0 / (distance * distance);
 		vec3  radiance	  = lightColor * attenuation;
 
-		// Cook-Torrance BRDF
-		float NDF = D_GGX(N, H, roughness);
-		float G	  = GeometrySmith(N, V, L, roughness);
-		vec3  F	  = F_Schlick(clamp(dot(H, V), 0.0f, 1.0f), F0);
 
-		vec3  numerator	  = NDF * G * F;
-		float denominator = 4.0f * max(dot(N, V), 0.0f) * max(dot(N, L), 0.0f) + 0.0001f; // + 0.0001 to prevent divide by zero
-		vec3  specular	  = numerator / denominator;
+		Lo += CalculateLight(albedo, radiance, N, V, L, F0, metallic, roughness);
+		//// Cook-Torrance BRDF
+		//float NDF = D_GGX(N, H, roughness);
+		//float G	  = GeometrySmith(N, V, L, roughness);
+		//vec3  F	  = F_Schlick(clamp(dot(H, V), 0.0f, 1.0f), F0);
 
-		// kS is equal to Fresnel
-		vec3 kS = F;
-		// for energy conservation, the diffuse and specular light can't
-		// be above 1.0 (unless the surface emits light); to preserve this
-		// relationship the diffuse component (kD) should equal 1.0 - kS.
-		vec3 kD = vec3(1.0) - kS;
-		// multiply kD by the inverse metalness such that only non-metals
-		// have diffuse lighting, or a linear blend if partly metal (pure metals
-		// have no diffuse light).
-		kD *= 1.0 - metallic;
+		//vec3  numerator	  = NDF * G * F;
+		//float denominator = 4.0f * max(dot(N, V), 0.0f) * max(dot(N, L), 0.0f) + 0.0001f; // + 0.0001 to prevent divide by zero
+		//vec3  specular	  = numerator / denominator;
 
-		// scale light by NdotL
-		float NdotL = max(dot(N, L), 0.0f);
+		//// kS is equal to Fresnel
+		//vec3 kS = F;
+		//// for energy conservation, the diffuse and specular light can't
+		//// be above 1.0 (unless the surface emits light); to preserve this
+		//// relationship the diffuse component (kD) should equal 1.0 - kS.
+		//vec3 kD = vec3(1.0) - kS;
+		//// multiply kD by the inverse metalness such that only non-metals
+		//// have diffuse lighting, or a linear blend if partly metal (pure metals
+		//// have no diffuse light).
+		//kD *= 1.0 - metallic;
 
-		// add to outgoing radiance Lo
-		Lo += (kD * albedo / PI + specular) * radiance * NdotL; // note that we already multiplied the BRDF by the Fresnel (kS) so we won't multiply by kS again
+		//// scale light by NdotL
+		//float NdotL = max(dot(N, L), 0.0f);
+
+		//// add to outgoing radiance Lo
+		//Lo += (kD * albedo / PI + specular) * radiance * NdotL; // note that we already multiplied the BRDF by the Fresnel (kS) so we won't multiply by kS again
+	}
+
+	// Add directional light
+	{
+		vec3 L = vec3(-1.0f, 1, -1.0f);
+		Lo += CalculateLight(albedo, vec3(1.0, 1.0, 1.0), N, V, L, F0, metallic, roughness);
 	}
 
 	// ambient lighting (we now use IBL as the ambient term)
@@ -359,5 +463,32 @@ Color4f RenderCorePBR::Shading(const GlobalConstantBuffer& cGlobalBuffer, const 
 	// gamma correct
 	color = pow(color, vec3(1.0 / 2.2));
 
+	//return vec4(N * 0.5f + vec3(0.5f), 1.0);
 	return vec4(color, 1.0);
+}
+
+Color4f RenderCoreSkybox::Execute(const GlobalConstantBuffer& cGlobalBuffer,
+				const VertexOutputData&		vertexData,
+				class Material*				material) noexcept
+{
+	auto	  evnTexture = GetEnvironmentData()->EnvTexture;
+	glm::vec4 viewPos	 = cGlobalBuffer.ViewMatrix * glm::vec4(vertexData.Position, 1.0f);
+	glm::vec3 viewCoords = viewPos.xyz;
+	viewCoords			 = viewCoords / viewPos.w;
+
+	glm::mat4 skyboxViewMatrix = glm::mat4(glm::mat3(cGlobalBuffer.ViewMatrix));
+	glm::vec3 skyboxCoords	   = glm::vec3(skyboxViewMatrix * glm::vec4(viewCoords, 1.0f));
+
+	// return { 0.2f, 0.2f, 0, 1 };
+	vec3 color = textureCubeLod(evnTexture, vertexData.Position.xyz, 0).rgb;
+	// color	   = glm::pow(color, vec3(2.2f));
+
+	//	// HDR tonemapping
+	// color = color / (color + vec3(1.0));
+	//// gamma correct
+	// color = pow(color, vec3(1.0 / 2.2));
+
+	auto FragColor = vec4(color, 1.0);
+
+	return FragColor;
 }

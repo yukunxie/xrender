@@ -307,6 +307,7 @@ MeshComponent* MeshComponentBuilder::CreateSkyBox(const Vector3f scale)
 	MeshComponent* meshComp = new MeshComponent();
 	meshComp->Geometry_		= new Geometry;
 	meshComp->Material_		= new Material("Materials/PBR.json");
+	meshComp->Material_->SetRenderCore(std::make_shared<RenderCoreSkybox>());
 
 	std::vector<TVector3> positions = {
 		// Front face

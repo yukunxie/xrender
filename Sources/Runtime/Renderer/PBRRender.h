@@ -4,19 +4,6 @@
 #include "Graphics/Material.h"
 #include "Graphics/Prefilter.h"
 
-namespace GGX
-{
-	float	   D(const Vector3f& m, const Vector2f& a);
-	float	   DV(const Vector3f& m, const Vector3f& wo, const Vector2f& a);
-	float	   Lambda(const Vector3f& wo, const Vector2f& a);
-	float	   SmithG1(const Vector3f& wo, const Vector2f& a);
-	float	   SmithG2(const Vector3f& wi, const Vector3f& wo, const Vector2f& a);
-	float	   reflection(const Vector3f& wi, const Vector3f& wo, const Vector2f& a, float& PDF);
-	float	   transmission(const Vector3f& wi, const Vector3f& wo, float n1, float n2, const Vector2f& a, float& PDF);
-	Vector3f visibleMicrofacet(float u, float v, const Vector3f& wo, const Vector2f& a);
-} // namespace GGX
-
-
 class Renderer
 {
 public:
@@ -39,8 +26,6 @@ public:
 	{
 	}
 
-	virtual Color4f Render(const GlobalConstantBuffer& cGlobalBuffer, const BatchBuffer& cBatchBuffer, const ShadingBuffer& cShadingBuffer, Vector3f pos, Vector3f normal, Vector2f uv, const TMat3x3& normalMatrix, const Material* material) noexcept = 0;
-
 	virtual Color4f RenderSkybox(const GlobalConstantBuffer& cGlobalBuffer, Vector3f worldPosition) noexcept = 0;
 
 protected:
@@ -54,7 +39,5 @@ protected:
 class PBRRender: public Renderer
 {
 public:
-	virtual Color4f Render(const GlobalConstantBuffer& cGlobalBuffer, const BatchBuffer& cBatchBuffer, const ShadingBuffer& cShadingBuffer, Vector3f pos, Vector3f normal, Vector2f uv, const TMat3x3& normalMatrix, const Material* material) noexcept override;
-
 	virtual Color4f RenderSkybox(const GlobalConstantBuffer& cGlobalBuffer, Vector3f worldPosition) noexcept override;
 };

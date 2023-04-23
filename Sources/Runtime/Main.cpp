@@ -33,9 +33,9 @@
 
 #include "Loader/GLTFLoader.h"
 #include "XRenderer.h"
-#include "Renderer/PBRRender.h"
 #include "Graphics/Material.h"
-#include "RTRender.h"
+#include "Raytracer.h"
+#include "Renderer/PBRRender.h"
 
 std::map<int, MeshComponent*> GMeshComponentProxies;
 
@@ -47,15 +47,15 @@ void AddEntityToEmbreeScene(RTCDevice device_i, RTCScene scene_i, const std::vec
 	}
 }
 
-int width  = 1024;
-int height = 1024;
+int width  = 2048;
+int height = 2048;
 
 int main()
 {
 	// init global texturs;
 	{
 		EnvironmentTextures* envTextures = GetEnvironmentData();
-		envTextures->BRDFTexture = std::make_shared<Texture2D>("Engine/lutBRDF.png");
+		envTextures->BRDFTexture		 = std::make_shared<Texture2D>("Engine/lutBRDF.png");
 		/*PhysicalImage32F image("Textures/hdr/newport_loft.hdr");
 		mEnvTexture = PrefilterEnvironmentTexture(image);*/
 		envTextures->EnvTexture = std::make_shared<TextureCube>("SkyBox0");
@@ -77,7 +77,7 @@ int main()
 
 	// Add Sky box
 	{
-		//auto	cubeMesh = MeshComponentBuilder::CreateBox("", Vector3f(1000.0f));
+		// auto	cubeMesh = MeshComponentBuilder::CreateBox("", Vector3f(1000.0f));
 		auto	cubeMesh = MeshComponentBuilder::CreateSkyBox(Vector3f(10000.0f));
 		Entity* skybox	 = new Entity();
 		skybox->AddComponment(cubeMesh);
@@ -88,18 +88,18 @@ int main()
 	{
 		// auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Models/deer.gltf");
 		// auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Models/color_teapot_spheres.gltf");
-		 auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Scenes/Sponza/Sponza.gltf");
+		auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Scenes/Sponza/Sponza.gltf");
 		// auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Scenes/cornellbox/cornellBox-2.80-Eevee-gltf.gltf");
-		//auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Models/DamagedHelmet/glTF-Embedded/DamagedHelmet.gltf");
+		// auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Models/DamagedHelmet/glTF-Embedded/DamagedHelmet.gltf");
 		AddEntityToEmbreeScene(device, scene, gltfSceneEntities);
 	}
 
 	{
-		 auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Models/deer.gltf");
-		// auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Models/color_teapot_spheres.gltf");
-		//auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Scenes/Sponza/Sponza.gltf");
+		 //auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Models/deer.gltf");
+		 //auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Models/cerberus/cerberus.gltf");
+		// auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Scenes/Sponza/Sponza.gltf");
 		// auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Scenes/cornellbox/cornellBox-2.80-Eevee-gltf.gltf");
-		 //auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Models/DamagedHelmet/glTF-Embedded/DamagedHelmet.gltf");
+		auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Models/DamagedHelmet/glTF-Embedded/DamagedHelmet.gltf");
 		AddEntityToEmbreeScene(device, scene, gltfSceneEntities);
 	}
 
@@ -113,6 +113,11 @@ int main()
 	Vector3f focus = { .0f, 0.0f, 0.0f };
 	Vector3f up	   = { 0, 1, 0 };
 	float	 fov   = 60;
+
+	glm::vec3 cameraFront = glm::normalize(focus - pos);
+
+	//pos = pos + cameraFront * 30.0f;
+	//focus = pos + cameraFront * 10.0f;
 
 
 	RTCRayQueryContext context;
@@ -133,19 +138,61 @@ int main()
 
 	// print_bvh(scene);
 
-	int		channels_num = 4;
+	int			  channels_num = 4;
 	PhysicalImage renderImage(width, height, channels_num);
 
 	auto sampler = RxSampler::CreateSampler();
+
 
 	GlobalConstantBuffer cGlobalBuffer;
 	{
 		cGlobalBuffer.EyePos		= Vector4f(pos.x, pos.y, pos.z, 1.0f);
 		cGlobalBuffer.SunLight		= Vector4f(-10.0f, -10.0f, -10.0f, 0.0f);
 		cGlobalBuffer.SunLightColor = Vector4f(1.0f, 1.0f, 1.0f, 1.0f);
-		cGlobalBuffer.ViewMatrix;
-		cGlobalBuffer.ProjMatrix;
+		cGlobalBuffer.ViewMatrix	= glm::lookAtRH(pos, focus, up);
+		cGlobalBuffer.ProjMatrix	= glm::perspectiveFovRH(fov, float(width), float(height), 0.1f, 20000.0f);
+
+		glm::vec3 center(0.0f, 0.0f, 0.0f); // 立方体中心位置
+		float	  length = 40.0f;			// 立方体边长的一半
+
+		// 定义8个顶点坐标
+		glm::vec3 vertex0(center.x - length, center.y - length, center.z - length);
+		glm::vec3 vertex1(center.x + length, center.y - length, center.z - length);
+		glm::vec3 vertex2(center.x - length, center.y + length, center.z - length);
+		glm::vec3 vertex3(center.x + length, center.y + length, center.z - length);
+		glm::vec3 vertex4(center.x - length, center.y - length, center.z + length);
+		glm::vec3 vertex5(center.x + length, center.y - length, center.z + length);
+		glm::vec3 vertex6(center.x - length, center.y + length, center.z + length);
+		glm::vec3 vertex7(center.x + length, center.y + length, center.z + length);
+
+		// 将8个顶点坐标放入一个std::vector列表中
+		std::vector<glm::vec3> vertices = { vertex0, vertex1, vertex2, vertex3, vertex4, vertex5, vertex6, vertex7 };
+
+		for (auto pos : vertices)
+		{
+			cGlobalBuffer.Lights.emplace_back(pos, vec3(300.0f, 300.0f, 300.0f));
+		}
 	}
+
+	RTContext raytracerContext;
+	{
+		raytracerContext.Camera = CameraInfo{
+			.Position = pos,
+			.Foucs	  = focus,
+			.Up		  = up,
+			.Fov	  = fov
+		};
+		raytracerContext.RTScene			  = scene;
+		raytracerContext.GlobalParameters	  = cGlobalBuffer;
+		raytracerContext.RenderTargetColor	  = std::make_shared<PhysicalImage>(width, height, channels_num);
+		raytracerContext.RenderTargetNormal	  = std::make_shared<PhysicalImage>(width, height, channels_num);
+		raytracerContext.RenderTargetEmissive = std::make_shared<PhysicalImage>(width, height, channels_num);
+		raytracerContext.RenderTargetLighting = std::make_shared<PhysicalImage>(width, height, channels_num);
+		raytracerContext.RenderTargetAO		  = std::make_shared<PhysicalImage>(width, height, channels_num);
+		raytracerContext.RenderTargetDepth	  = std::make_shared<PhysicalImage32F>(width, height, channels_num);
+	}
+
+	Raytracer raytracer(raytracerContext);
 
 	BatchBuffer cBatchBuffer;
 	{
@@ -154,23 +201,25 @@ int main()
 
 	PBRRender pbrRender;
 
-	std::thread rtRenderThread([&pbrRender, &renderImage, &pos, &focus, &up, &fov, &scene]()
-							   { RTRender(pos, focus, up, fov, &renderImage, scene, pbrRender); });
+	std::thread rtRenderThread([&pbrRender, &raytracerContext, &raytracer]()
+							   { 
+								   raytracer.RenderAsync();
+							   });
 
 
 	const auto mouse_callback = [&](float xoffset, float yoffset)
 	{
 		auto mat = glm::lookAtRH(pos, focus, up);
 
-		//float sensitivity = 0.05f; //灵敏度
-		//xoffset *= sensitivity;
-		//yoffset *= sensitivity;
+		// float sensitivity = 0.05f; //灵敏度
+		// xoffset *= sensitivity;
+		// yoffset *= sensitivity;
 
-		//yaw += xoffset;
-		//pitch += yoffset;
+		// yaw += xoffset;
+		// pitch += yoffset;
 
-		glm::vec3 cameraFront = glm::normalize(focus - pos);
-		float	  raw		  = glm::degrees(glm::asin(cameraFront.y));
+		glm::vec3 cameraFront	  = glm::normalize(focus - pos);
+		float	  raw			  = glm::degrees(glm::asin(cameraFront.y));
 		glm::vec3 cameraDirection = glm::normalize(glm::vec3(cameraFront.x, 0.0f, cameraFront.z));
 		float	  yaw			  = glm::degrees(glm::atan(cameraDirection.z, cameraDirection.x));
 		glm::vec3 cameraUp		  = glm::normalize(up);
@@ -189,14 +238,14 @@ int main()
 		front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch)) - 1;
 
 		focus = glm::normalize(front) * glm::length(focus - pos);
-		
+
 		/*std::thread rtRenderThread([&pbrRender, &renderImage, &pos, &focus, &up, &fov, &scene]()
 								   { RTRender(pos, focus, up, fov, &renderImage, scene, pbrRender); });*/
 
-		RTRender(pos, focus, up, fov, &renderImage, scene, pbrRender);
+		//RTRender(pos, focus, up, fov, &renderImage, scene, pbrRender);
 	};
 
-	Renderer(&renderImage, mouse_callback);
+	Renderer(raytracerContext.RenderTargetColor.get(), mouse_callback);
 	renderImage.SaveToFile("D:/x_render.png");
 
 	rtRenderThread.join();

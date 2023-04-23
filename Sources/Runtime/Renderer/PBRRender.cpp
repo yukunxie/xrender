@@ -2,7 +2,6 @@
 #include "PBRRender.h"
 #include "Graphics/RxSampler.h"
 #include <algorithm>
-#include "PBRShader.h"
 #include "ShadingBase.h"
 
 
@@ -18,88 +17,6 @@
   https://www.cs.cornell.edu/~srm/publications/EGSR07-btdf.html
 
 */
-
-Color4f PBRRender::Render(const GlobalConstantBuffer& cGlobalBuffer, const BatchBuffer& cBatchBuffer, const ShadingBuffer& cShadingBuffer, Vector3f pos, Vector3f worldNormal, Vector2f uv, const TMat3x3& normalMatrix, const Material* material) noexcept
-{
-	auto abledoTexture	  = material->GetTexture("tAlbedo");
-	auto matTexture		  = material->GetTexture("tMetallicRoughnessMap");
-	auto normalTexture	  = material->GetTexture("tNormalMap");
-	auto emissiveTexture  = material->GetTexture("tEmissiveMap");
-	auto occlusionTexture = material->GetTexture("tOcclusionMap");
-
-	static RxSampler* sampler = RxSampler::CreateSampler(RxSamplerType::Linear, RxWrapMode::Repeat);
-	Color3f			  EmissiveColor(0.0f);
-	Color3f			  AOColor(0.0f);
-	Color3f			  Albedo(cShadingBuffer.baseColorFactor);
-
-	if (abledoTexture)
-	{
-		Albedo = Albedo * sampler->ReadPixel(abledoTexture.get(), uv.x, uv.y).xyz;
-	}
-
-	if (emissiveTexture)
-	{
-		EmissiveColor = sampler->ReadPixel(emissiveTexture.get(), uv.x, uv.y).xyz;
-	}
-
-	if (occlusionTexture)
-	{
-		AOColor = sampler->ReadPixel(occlusionTexture.get(), uv.x, uv.y).xyz;
-	}
-
-	Vector3f sunDir	 = -1.0f * Vector3f{ cGlobalBuffer.SunLight.x, cGlobalBuffer.SunLight.y, cGlobalBuffer.SunLight.z };
-	sunDir			 = glm::normalize(sunDir);
-	Vector3f viewDir = Vector3f(cGlobalBuffer.EyePos) - pos;
-	viewDir			 = glm::normalize(viewDir);
-
-	vec3 N;
-	if (normalTexture )
-	{
-		vec3 tn = vec3(sampler->ReadPixel(normalTexture.get(), uv.x, uv.y));
-		N		= glm::normalize(normalMatrix * (tn * 2.0f - 1.0f));
-	}
-	else
-	{
-		N = glm::normalize(worldNormal);
-	}
-
-	// 计算视线方向Metallic
-	vec3 V = glm::normalize(viewDir);
-
-	// 计算光线方向和半角向量
-	vec3 L = sunDir;
-	vec3 H = normalize(L + V);
-	vec3 R = reflect(-V, N);
-
-	vec4  mat11		= sampler->ReadPixel(matTexture.get(), uv.x, uv.y);
-	float roughness = mat11.g;
-	float metallic	= mat11.b;
-
-	float Roughness = roughness;
-	float Metallic	= metallic;
-
-	// return PBRShading(metallic, roughness, normalMatrix, N, V, L, H, 1.0f, Albedo, mBRDFTexture.get(), (RxImageCube*)mEnvTexture.get());
-
-	GBufferData gBufferData{
-		.Albedo		   = Albedo,
-		.WorldNormal   = N,
-		.Position	   = pos,
-		.Material	   = vec3(metallic, roughness, 0),
-		.EmissiveColor = EmissiveColor,
-		.AOMask		   = AOColor,
-	};
-
-	EnvironmentTextures gEnvironmentData;
-	{
-		gEnvironmentData.BRDFTexture		 = mBRDFTexture;
-		gEnvironmentData.EnvTexture			 = mEnvTexture;
-		gEnvironmentData.SphericalEnvTexture = mSphericalEnvTexture;
-		gEnvironmentData.IrradianceTexture	 = mIrradianceTexture;
-	}
-
-
-	return PBRShading(cGlobalBuffer, gBufferData, gEnvironmentData);
-}
 
 static vec2 _SampleSphericalMap(vec3 v)
 {

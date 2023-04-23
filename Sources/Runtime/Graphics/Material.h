@@ -89,7 +89,6 @@ public:
 
 public:
 	virtual Color4f Execute(const GlobalConstantBuffer& cGlobalBuffer,
-							const BatchBuffer&			cBatchBufferconst,
 							const VertexOutputData&		vertexData,
 							class Material*				material) noexcept = 0;
 };
@@ -98,7 +97,6 @@ class RenderCorePBR : public RenderCore
 {
 public:
 	Color4f Execute(const GlobalConstantBuffer& cGlobalBuffer, 
-					const BatchBuffer& cBatchBufferconst,
 					const VertexOutputData& vertexData, 
 					class Material* material) noexcept override;
 
@@ -112,14 +110,18 @@ class RenderCoreSkybox : public RenderCore
 {
 public:
 	Color4f Execute(const GlobalConstantBuffer& cGlobalBuffer,
-					const BatchBuffer&			cBatchBufferconst,
 					const VertexOutputData&		vertexData,
-					class Material*				material) noexcept override
-	{
-	}
+					class Material*				material) noexcept override;
 };
 
 typedef std::shared_ptr<RenderCore> RenderCorePtr;
+
+enum EAlphaMode
+{
+	EAlphaMode_Opaque,
+	EAlphaMode_Blend,
+	EAlphaMode_Mask,
+};
 
 
 class Material
@@ -155,10 +157,43 @@ public:
 	vec3 GetVec3(const std::string& name) const;
 	vec4 GetVec4(const std::string& name) const;
 
+	void SetAlphaMode(EAlphaMode alphaMode)
+	{
+		mAlphaMode = alphaMode;
+	}
+
+	EAlphaMode GetAlphaMode() const 
+	{
+		return mAlphaMode;
+	}
+
+	void SetAlphaCutoff(float cutoff)
+	{
+		mAlphaCutoff = cutoff;
+	}
+
+	float GetAlphaCutoff() const
+	{
+		return mAlphaCutoff;
+	}
+
+	void SetDoubleSide(bool doubleSide)
+	{
+		mDoubleSide = doubleSide;
+	}
+
+	bool GetDoubleSide() const
+	{
+		return mDoubleSide;
+	}
+
 public:
 	std::map<std::string, MaterialParameter> mParameters;
 	std::map<std::string, TexturePtr>		 mTextures;
 
 protected:
 	RenderCorePtr mRenderCore;
+	EAlphaMode	  mAlphaMode   = EAlphaMode_Opaque;
+	float		  mAlphaCutoff = 0.5f;
+	bool		  mDoubleSide  = true;
 };

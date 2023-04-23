@@ -155,6 +155,13 @@ typedef glm::mat4x4 TMat4x4;
 typedef glm::mat3x4 TMat3x4;
 typedef glm::mat3x3 TMat3x3;
 
+struct CameraInfo
+{
+	TVector3 Position;
+	TVector3 Foucs;
+	TVector3 Up;
+	float	 Fov;
+};
 
 struct Triangle
 {
