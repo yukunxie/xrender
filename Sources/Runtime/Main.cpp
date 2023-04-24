@@ -37,7 +37,7 @@
 #include "Raytracer.h"
 #include "Renderer/PBRRender.h"
 
-std::map<int, MeshComponent*> GMeshComponentProxies;
+std::map<int, RTInstanceData> GMeshComponentProxies;
 
 void AddEntityToEmbreeScene(RTCDevice device_i, RTCScene scene_i, const std::vector<Entity*>& entities)
 {
@@ -47,8 +47,8 @@ void AddEntityToEmbreeScene(RTCDevice device_i, RTCScene scene_i, const std::vec
 	}
 }
 
-int width  = 2048;
-int height = 2048;
+int width  = 4096;
+int height = 4096;
 
 int main()
 {
@@ -85,6 +85,9 @@ int main()
 		AddEntityToEmbreeScene(device, scene, entities);
 	}
 
+
+
+#if 1
 	{
 		// auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Models/deer.gltf");
 		// auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Models/color_teapot_spheres.gltf");
@@ -93,6 +96,22 @@ int main()
 		// auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Models/DamagedHelmet/glTF-Embedded/DamagedHelmet.gltf");
 		AddEntityToEmbreeScene(device, scene, gltfSceneEntities);
 	}
+#else
+	{
+		auto	cubeMesh = MeshComponentBuilder::CreateBox("");
+		Entity* plane	 = new Entity();
+		plane->AddComponment(cubeMesh);
+		std::vector<Entity*> entities = { plane };
+		entities[0]->SetScale(vec3(1000, 1.0f, 1000));
+		entities[0]->SetPosition(vec3(0, -1.0f, 0));
+		MeshComponent* mesh = entities[0]->GetComponent<MeshComponent>();
+		float		   roughness = 0.9f;
+		float		   metallic	 = 0.1f;
+		mesh->GetMaterial()->SetFloat("roughnessFactor", 0, 1, &roughness);
+		mesh->GetMaterial()->SetFloat("metallicFactor", 0, 1, &metallic);
+		AddEntityToEmbreeScene(device, scene, entities);
+	}
+#endif
 
 	{
 		 //auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Models/deer.gltf");
@@ -100,6 +119,9 @@ int main()
 		// auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Scenes/Sponza/Sponza.gltf");
 		// auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Scenes/cornellbox/cornellBox-2.80-Eevee-gltf.gltf");
 		auto gltfSceneEntities = GLTFLoader::LoadModelFromGLTF("Models/DamagedHelmet/glTF-Embedded/DamagedHelmet.gltf");
+		 gltfSceneEntities[0]->SetScale(vec3(0.5f));
+		 gltfSceneEntities[0]->SetPosition(vec3(-4, 2, 0));
+
 		AddEntityToEmbreeScene(device, scene, gltfSceneEntities);
 	}
 
@@ -108,9 +130,9 @@ int main()
 
 	RTCRayHit rayhit;
 
-	//Vector3f pos   = { -3, 5.0f, -3.0f };
-	Vector3f pos   = { 50, 10.0f, 0.0f };
-	Vector3f focus = { .0f, 0.0f, 0.0f };
+	Vector3f pos   = { 10, 2.0f, 0.0f };
+	//Vector3f pos   = { 50, 10.0f, 0.0f };
+	Vector3f focus = { .0f, 2.0f, 0.0f };
 	Vector3f up	   = { 0, 1, 0 };
 	float	 fov   = 60;
 
@@ -147,13 +169,14 @@ int main()
 	GlobalConstantBuffer cGlobalBuffer;
 	{
 		cGlobalBuffer.EyePos		= Vector4f(pos.x, pos.y, pos.z, 1.0f);
-		cGlobalBuffer.SunLight		= Vector4f(-10.0f, -10.0f, -10.0f, 0.0f);
+		cGlobalBuffer.SunLight		= Vector4f(.0f, -1.0f, 0.0f, 0.0f);
 		cGlobalBuffer.SunLightColor = Vector4f(1.0f, 1.0f, 1.0f, 1.0f);
 		cGlobalBuffer.ViewMatrix	= glm::lookAtRH(pos, focus, up);
 		cGlobalBuffer.ProjMatrix	= glm::perspectiveFovRH(fov, float(width), float(height), 0.1f, 20000.0f);
 
+
 		glm::vec3 center(0.0f, 0.0f, 0.0f); // 立方体中心位置
-		float	  length = 40.0f;			// 立方体边长的一半
+		float	  length = 10.0f;			// 立方体边长的一半
 
 		// 定义8个顶点坐标
 		glm::vec3 vertex0(center.x - length, center.y - length, center.z - length);
@@ -168,9 +191,11 @@ int main()
 		// 将8个顶点坐标放入一个std::vector列表中
 		std::vector<glm::vec3> vertices = { vertex0, vertex1, vertex2, vertex3, vertex4, vertex5, vertex6, vertex7 };
 
+		//cGlobalBuffer.Lights.emplace_back(center, vec3(100.0f, 100.0f, 100.0f));
+
 		for (auto pos : vertices)
 		{
-			cGlobalBuffer.Lights.emplace_back(pos, vec3(300.0f, 300.0f, 300.0f));
+			cGlobalBuffer.Lights.emplace_back(pos, vec3(100.0f, 100.0f, 100.0f));
 		}
 	}
 

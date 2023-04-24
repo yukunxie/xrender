@@ -25,10 +25,12 @@ Color4f RxSampler::ReadPixel(const Texture* texture, float u, float v, int lod) 
 	const auto& image = ((const Texture2D*)texture)->GetImageWithMip(lod);
 	int			w	  = (image->GetWidth() - 1);
 	int			h	  = (image->GetHeight() - 1);
-	int			pw	  = int(u * w);
-	int			ph	  = int(v * h);
-	float		fx	  = u * w - pw;
-	float		fy	  = v * h - ph;
+	float		tx	  = (u * w);
+	float		ty	  = (v * h);
+	int pw = int(glm::floor(tx));
+	int ph = int(glm::floor(ty));
+	float fx = glm::fract(tx);
+	float fy = glm::fract(ty);
 
 	Color4f c00, c10, c01, c11;
 	{
@@ -50,6 +52,8 @@ Color4f RxSampler::ReadPixel(const Texture* texture, float u, float v, int lod) 
 	Color4f c0 = glm::mix(c00, c10, fx);
 	Color4f c1 = glm::mix(c01, c11, fx);
 	Color4f c  = glm::mix(c0, c1, fy);
+
+	Assert(c.x >= -0.00001f && c.y >= -0.00001f && c.y >= -0.0001f);
 
 	return c;
 }

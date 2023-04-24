@@ -40,13 +40,12 @@ std::vector<TiledTaskData> GenerateTasks(size_t width, size_t height, size_t til
 class Raytracer
 {
 public:
-	Raytracer(const RTContext& context)
-		: mContext(context)
-	{
-	}
+	Raytracer(const RTContext& context);
 
 public:
 	void RenderAsync() noexcept;
+
+	bool IsShadowRay(vec3 from, vec3 to) const noexcept;
 
 protected:
 	void ProcessTask(const TiledTaskData& task, const embree::ISPCCamera& ispcCamera) noexcept;
@@ -56,4 +55,5 @@ protected:
 	static const int NUM_CORE = 16;
 	static const int TileSize = 64;
 	RTContext mContext;
+	embree::ISPCCamera mISPCCamera;
 };

@@ -5,6 +5,7 @@
 #include "Entity.h"
 #include "Component.h"
 #include "MeshComponent.h"
+#include "math/affinespace.h"
 
 Entity::Entity()
     : WorldMatrix_(1.0f)
@@ -84,7 +85,7 @@ void Entity::Tick(float dt)
         child->Tick(dt);
     }
 }
-extern std::map<int, MeshComponent*> GMeshComponentProxies;
+extern std::map<int, RTInstanceData> GMeshComponentProxies;
 
 void Entity::AddToEmbreeScene(RTCDevice device_i, RTCScene scene_i)
 {
@@ -95,6 +96,11 @@ void Entity::AddToEmbreeScene(RTCDevice device_i, RTCScene scene_i)
 			child->AddToEmbreeScene(device_i, scene_i);
 		}
 	}
+
+	RTCScene instanceScene = rtcNewScene(device_i);
+
+	RTInstanceData rtInstanceData;
+	rtInstanceData.InstanceId = (uint32)GMeshComponentProxies.size();
 
 	for (auto component : Components_)
 	{
@@ -168,13 +174,36 @@ void Entity::AddToEmbreeScene(RTCDevice device_i, RTCScene scene_i)
 
 		rtcCommitGeometry(rtcMesh);
 
-		unsigned int geomID = rtcAttachGeometry(scene_i, rtcMesh);
-
-		std::cout << "AddEntityToEmbreeScene geomID=" << geomID << std::endl;
-
-		GMeshComponentProxies[geomID] = meshComponent;
+		unsigned int geomID = rtcAttachGeometry(instanceScene, rtcMesh);
+		//std::cout << "AddEntityToEmbreeScene geomID=" << geomID << std::endl;
+		printf("AddEntityToEmbreeScene instId=%u geomId=%u\n", rtInstanceData.InstanceId, geomID);
+		Assert(geomID == rtInstanceData.MeshComponents.size());
+		rtInstanceData.MeshComponents.push_back(meshComponent);
 	}
 
-	
+	rtcCommitScene(instanceScene);
+
+	auto entityInstance = rtcNewGeometry(device_i, RTC_GEOMETRY_TYPE_INSTANCE);
+	rtcSetGeometryInstancedScene(entityInstance, instanceScene);
+	rtcSetGeometryTimeStepCount(entityInstance, 1);
+	rtcAttachGeometryByID(scene_i, entityInstance, rtInstanceData.InstanceId);
+
+	Assert(false == GMeshComponentProxies.contains(rtInstanceData.InstanceId));
+	GMeshComponentProxies[rtInstanceData.InstanceId] = rtInstanceData;
+
+	embree::AffineSpace3fa instance_xfm;
+
+	const auto scale	 = GetScale();
+	const auto rotate	 = GetRotation();
+	const auto translate = GetPosition();
+
+	instance_xfm.scale(embree::Vec3f(scale.x, scale.y, scale.z));
+	// instance_xfm.rotate(embree::Vec3f(rotate.x, rotate.y, rotate.z));
+
+	instance_xfm = embree::AffineSpace3fa::scale(embree::Vec3f(scale.x, scale.y, scale.z)) * embree::AffineSpace3fa::translate(embree::Vec3f(translate.x, translate.y, translate.z));
+	rtcSetGeometryTransform(entityInstance, 0, RTC_FORMAT_FLOAT4X4_COLUMN_MAJOR, &instance_xfm);
+
+	rtcReleaseGeometry(entityInstance);
+	rtcCommitGeometry(entityInstance);
     
 }

@@ -32,6 +32,7 @@
 #include "Graphics/PhysicalImage.h"
 #include "Graphics/RxSampler.h"
 #include "Object/MeshComponent.h"
+#include "Object/Entity.h"
 #include <glm/glm.hpp>
 #include <glm/geometric.hpp>  
 
@@ -57,7 +58,7 @@
 #endif
 
 
-extern std::map<int, MeshComponent*> GMeshComponentProxies;
+extern std::map<int, RTInstanceData> GMeshComponentProxies;
 
 glm::vec3 triangleBitangent(const glm::vec3& v1, const glm::vec3& v2, const glm::vec3& v3, const glm::vec2& uv1, const glm::vec2& uv2, const glm::vec2& uv3)
 {
@@ -104,18 +105,18 @@ Vector3f interpolateNormal(float u, float v, Vector3f p0, Vector3f p1, Vector3f 
 	return {};
 }
 
-static bool _ProcessRayHitResult(/*PBRRender& pbrRender, */const GlobalConstantBuffer& cGlobalBuffer, vec3 viewDir, vec2 uv, int geomID, int primID, Color4f & fragColor)
+static bool _ProcessRayHitResult(const Raytracer* rayTracer, const GlobalConstantBuffer& cGlobalBuffer, vec3 viewDir, vec2 uv, int instanceId, int geomID, int primID, Color4f & fragColor)
 {
 	//Assert(geomID != RTC_INVALID_GEOMETRY_ID);
 
-	if (geomID == RTC_INVALID_GEOMETRY_ID)
+	if (instanceId == RTC_INVALID_GEOMETRY_ID)
 	{
 		fragColor = Color4f(1.0f, 0.0f, 1.0f, 1.0f);
 		return true;
 	}
-	else /*if (geomID != 0)*/
+	else/* if (instanceId != 0)*/
 	{
-		auto  meshProxy = GMeshComponentProxies[geomID];
+		auto meshProxy = GMeshComponentProxies[instanceId].MeshComponents[geomID];
 
 		//return Color4f(meshProxy->GetDebugColor(), 1.0f);
 
@@ -127,7 +128,9 @@ static bool _ProcessRayHitResult(/*PBRRender& pbrRender, */const GlobalConstantB
 		uint32 v0, v1, v2;
 		std::tie(v0, v1, v2) = meshProxy->GetGeometry()->GetIndexBuffer()->GetVerticesByPrimitiveId(primID);
 
-		const VertexOutputData& vertexData = RenderCore::InterpolateAttributes(vec2(u, v), meshProxy->GetGeometry(), primID);
+		const TMat4x4 & worldMatrix =  meshProxy->GetOwner()->GetWorldMatrix();
+
+		const VertexOutputData& vertexData = RenderCore::InterpolateAttributes(vec2(u, v), worldMatrix, meshProxy->GetGeometry(), primID);
 
 		Vector3f p0, p1, p2;
 		std::tie(p0, p1, p2) = meshProxy->GetGeometry()->GetTripleAttributesByIndex<Vector3f>(VertexBufferAttriKind::NORMAL, v0, v1, v2);
@@ -140,7 +143,7 @@ static bool _ProcessRayHitResult(/*PBRRender& pbrRender, */const GlobalConstantB
 			isBackSurface = true;
 		}
 
-		fragColor = material->GetRenderCore()->Execute(cGlobalBuffer, vertexData, material);
+		fragColor = material->GetRenderCore()->Execute(rayTracer, cGlobalBuffer, vertexData, material);
 		return !isBackSurface || material->GetDoubleSide();
 	}
 	//else if (geomID == 0)
@@ -186,14 +189,21 @@ std::vector<TiledTaskData> GenerateTasks(size_t width, size_t height, size_t til
 	return std::move(renderTiles);
 }
 
+Raytracer::Raytracer(const RTContext& context)
+	: mContext(context)
+	, mISPCCamera(embree::AffineSpace3fa())
+{
+}
+
 void Raytracer::RenderAsync() noexcept
 {
 	SCOPED_PROFILING_GUARD("RayTracingRender");
 	int width  = mContext.RenderTargetColor->GetWidth();
 	int height = mContext.RenderTargetColor->GetHeight();
 
-	embree::Camera camera = mContext.ToEmbreeCamera();
+	embree::Camera	   camera	  = mContext.ToEmbreeCamera();
 	embree::ISPCCamera ispcCamera = camera.getISPCCamera(width, height);
+	mISPCCamera					  = ispcCamera;
 	
 	constexpr int			   TileSize		   = 64;
 	constexpr int			   NUM_CORE		   = 16;
@@ -292,12 +302,35 @@ void Raytracer::ProcessTask(const TiledTaskData& task, const embree::ISPCCamera&
 
 			int		primID = GET_RTC_PARAM(rayhits.hit.primID, b);
 			int		geomID = GET_RTC_PARAM(rayhits.hit.geomID, b);
+			int		instanceId = GET_RTC_PARAM(rayhits.hit.instID[0], b);
 			Color4f fragColor;
-			bool	isValidSurface = _ProcessRayHitResult(mContext.GlobalParameters, vec3(x, y, z), vec2(u, v), geomID, primID, fragColor);
+			bool	isValidSurface = _ProcessRayHitResult(this, mContext.GlobalParameters, vec3(x, y, z), vec2(u, v), instanceId, geomID, primID, fragColor);
 			// if (!isValidSurface)
 			{
 				mContext.RenderTargetColor.get()->WritePixel(w, h, fragColor);
 			}
 		}
 	}
+}
+
+bool Raytracer::IsShadowRay(vec3 from, vec3 to) const noexcept
+{
+	RTCRayHit rayhit;
+	vec3	  dir	  = to - from;
+	rayhit.ray.org_x  = from.x;
+	rayhit.ray.org_y  = from.y;
+	rayhit.ray.org_z  = from.z;
+	rayhit.ray.dir_x  = dir.x;
+	rayhit.ray.dir_y  = dir.y;
+	rayhit.ray.dir_z  = dir.z;
+	rayhit.ray.tnear  = 0.000001f;
+	rayhit.ray.tfar	  = glm::length(dir);
+	rayhit.ray.time	  = 0;
+	rayhit.ray.mask	  = 0xFFFFFFFF;
+	rayhit.hit.geomID = RTC_INVALID_GEOMETRY_ID;
+	rayhit.hit.instID[0] = RTC_INVALID_GEOMETRY_ID;
+
+	rtcIntersect1(mContext.RTScene, &rayhit);
+
+	return rayhit.hit.instID[0] != 0 && (rayhit.hit.instID[0] != RTC_INVALID_GEOMETRY_ID);
 }

@@ -10,6 +10,7 @@
 class MeshComponent;
 class Geometry;
 class Material;
+class Raytracer;
 
 struct EnvironmentTextures
 {
@@ -85,10 +86,11 @@ public:
 		return barycenter.x * p1 + barycenter.y * p2 + (1.0f - barycenter.x - barycenter.y) * p2;
 	}
 
-	static VertexOutputData InterpolateAttributes(vec2 barycenter, const Geometry* mesh, int primId) noexcept;
+	static VertexOutputData InterpolateAttributes(vec2 barycenter, const TMat4x4& worldMatrix, const Geometry* mesh, int primId) noexcept;
 
 public:
-	virtual Color4f Execute(const GlobalConstantBuffer& cGlobalBuffer,
+	virtual Color4f Execute(const Raytracer*			rayTracer,
+							const GlobalConstantBuffer& cGlobalBuffer,
 							const VertexOutputData&		vertexData,
 							class Material*				material) noexcept = 0;
 };
@@ -96,20 +98,32 @@ public:
 class RenderCorePBR : public RenderCore
 {
 public:
-	Color4f Execute(const GlobalConstantBuffer& cGlobalBuffer, 
-					const VertexOutputData& vertexData, 
-					class Material* material) noexcept override;
+	Color4f Execute(const Raytracer*			rayTracer,
+					const GlobalConstantBuffer& cGlobalBuffer,
+					const VertexOutputData&		vertexData,
+					class Material*				material) noexcept override;
 
 protected:
-	Color4f Shading(const GlobalConstantBuffer& cGlobalBuffer
-					, const GBufferData& gBufferData
-					, const EnvironmentTextures& gEnvironmentData) const noexcept;
+	Color4f Shading(const Raytracer*			rayTracer,
+					const GlobalConstantBuffer& cGlobalBuffer,
+					const GBufferData&			gBufferData,
+					const EnvironmentTextures&	gEnvironmentData) const noexcept;
 };
 
 class RenderCoreSkybox : public RenderCore
 {
 public:
-	Color4f Execute(const GlobalConstantBuffer& cGlobalBuffer,
+	Color4f Execute(const Raytracer*			rayTracer,
+					const GlobalConstantBuffer& cGlobalBuffer,
+					const VertexOutputData&		vertexData,
+					class Material*				material) noexcept override;
+};
+
+class RenderCoreUnlit : public RenderCore
+{
+public:
+	Color4f Execute(const Raytracer*			rayTracer,
+					const GlobalConstantBuffer& cGlobalBuffer,
 					const VertexOutputData&		vertexData,
 					class Material*				material) noexcept override;
 };
@@ -152,9 +166,17 @@ public:
 
 	ShadingBuffer GetShadingBuffer() const;
 
+	bool HasParameter(const std::string& name) const noexcept
+	{
+		return mParameters.contains(name);
+	}
+
 	float GetFloat(const std::string& name) const;
+
 	vec2 GetVec2(const std::string& name) const;
+
 	vec3 GetVec3(const std::string& name) const;
+
 	vec4 GetVec4(const std::string& name) const;
 
 	void SetAlphaMode(EAlphaMode alphaMode)

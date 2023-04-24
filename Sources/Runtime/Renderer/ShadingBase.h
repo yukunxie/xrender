@@ -104,6 +104,18 @@ FORCEINLINE vec3 Uncharted2Tonemap(vec3 x)
 	return ((x * (A * x + C * B) + D * E) / (x * (A * x + B) + D * F)) - E / F;
 }
 
+FORCEINLINE vec3 ACESToneMapping(vec3 color, float adapted_lum)
+{
+	const float A = 2.51f;
+	const float B = 0.03f;
+	const float C = 2.43f;
+	const float D = 0.59f;
+	const float E = 0.14f;
+
+	color *= adapted_lum;
+	return (color * (A * color + B)) / (color * (C * color + D) + E);
+}
+
 // Geometric Shadowing function --------------------------------------
 FORCEINLINE float G_SchlicksmithGGX(float dotNL, float dotNV, float roughness)
 {
@@ -121,7 +133,7 @@ FORCEINLINE float G_schlick(float roughness, float NdV, float NdL){
 // Fresnel function ----------------------------------------------------
 FORCEINLINE vec3 F_Schlick(float cosTheta, vec3 F0)
 {
-	return F0 + (1.0f - F0) * pow(1.0f - cosTheta, 5.0f);
+	return glm::max(vec3(0), F0 + (1.0f - F0) * pow(1.0f - cosTheta, 5.0f));
 }
 FORCEINLINE vec3 F_SchlickR(float cosTheta, vec3 F0, float roughness)
 {

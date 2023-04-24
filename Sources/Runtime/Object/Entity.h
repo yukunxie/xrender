@@ -7,6 +7,13 @@
 
 #include <list>
 
+class MeshComponent;
+
+struct RTInstanceData
+{
+	uint32						InstanceId;
+	std::vector<MeshComponent*> MeshComponents;
+};
 
 class Entity
 {

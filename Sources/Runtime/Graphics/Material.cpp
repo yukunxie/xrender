@@ -2,6 +2,7 @@
 #include "Meshes/Geometry.h"
 #include "VertexBuffer.h"
 #include "Graphics/RxSampler.h"
+#include "Raytracer.h"
 
 EnvironmentTextures* GetEnvironmentData()
 {
@@ -101,7 +102,7 @@ vec4 Material::GetVec4(const std::string& name) const
 	return ((vec4*)it->second.Data.data())[0];
 }
 
-VertexOutputData RenderCore::InterpolateAttributes(vec2 barycenter, const Geometry* mesh, int primId) noexcept
+VertexOutputData RenderCore::InterpolateAttributes(vec2 barycenter, const TMat4x4& worldMatrix, const Geometry* mesh, int primId) noexcept
 {
 	VertexOutputData OutputData;
 
@@ -116,6 +117,8 @@ VertexOutputData RenderCore::InterpolateAttributes(vec2 barycenter, const Geomet
 	std::tie(p0, p1, p2) = mesh->GetTripleAttributesByIndex<Vector3f>(VertexBufferAttriKind::POSITION, v0, v1, v2);
 
 	OutputData.Position = u * p0 + v * p1 + s * p2;
+
+	OutputData.Position = (worldMatrix * vec4(OutputData.Position, 1.0f)).xyz;
 
 	Vector2f uv0, uv1, uv2;
 
@@ -156,19 +159,6 @@ VertexOutputData RenderCore::InterpolateAttributes(vec2 barycenter, const Geomet
 
 		OutputData.BiTangent = glm::cross(OutputData.Normal, T); // ¼ÆËã¸±ÇÐÏß
 		OutputData.HasBiTangent = true;
-
-		//if (mesh->HasAttribute(VertexBufferAttriKind::BITANGENT))
-		//{
-		//	Vector3f n0, n1, n2;
-		//	std::tie(n0, n1, n2) = mesh->GetTripleAttributesByIndex<Vector3f>(VertexBufferAttriKind::BITANGENT, v0, v1, v2);
-		//	n0					 = glm::normalize(n0);
-		//	n1					 = glm::normalize(n1);
-		//	n2					 = glm::normalize(n2);
-
-		//	OutputData.BiTangent	= glm::normalize(u * n0 + v * n1 + s * n2);
-		//	OutputData.HasBiTangent = true;
-		//}
-
 	}
 
 #else
@@ -221,7 +211,8 @@ VertexOutputData RenderCore::InterpolateAttributes(vec2 barycenter, const Geomet
 	return OutputData;
 }
 
-Color4f RenderCorePBR::Execute(const GlobalConstantBuffer& cGlobalBuffer,
+Color4f RenderCorePBR::Execute(const Raytracer*			   rayTracer,
+							   const GlobalConstantBuffer& cGlobalBuffer,
 							   const VertexOutputData&	   vertexData,
 							   class Material*			   material) noexcept
 {
@@ -336,20 +327,23 @@ Color4f RenderCorePBR::Execute(const GlobalConstantBuffer& cGlobalBuffer,
 		.AOMask		   = AOColor,
 	};
 
-	return Shading(cGlobalBuffer, gBufferData, *GetEnvironmentData());
+	return Shading(rayTracer, cGlobalBuffer, gBufferData, *GetEnvironmentData());
 }
 
 vec3 CalculateLight(vec3 albedo, vec3 radiance, vec3 N, vec3 V, vec3 L, vec3 F0, float metallic, float roughness)
 {
 	vec3 H = normalize(V + L);
 
+	N = glm::abs(N);
 	// Cook-Torrance BRDF
 	float NDF = D_GGX(N, H, roughness);
 	float G	  = GeometrySmith(N, V, L, roughness);
 	vec3  F	  = F_Schlick(clamp(dot(H, V), 0.0f, 1.0f), F0);
 
 	vec3  numerator	  = NDF * G * F;
-	float denominator = 4.0f * max(dot(N, V), 0.0f) * max(dot(N, L), 0.0f) + 0.0001f; // + 0.0001 to prevent divide by zero
+	float NdotV		  = dot(N, V);
+	float NdotL		  = dot(N, L);
+	float denominator = 4.0f * max(NdotV, 0.0f) * max(NdotL, 0.0f) + 0.0001f; // + 0.0001 to prevent divide by zero
 	vec3  specular	  = numerator / denominator;
 
 	// kS is equal to Fresnel
@@ -364,13 +358,98 @@ vec3 CalculateLight(vec3 albedo, vec3 radiance, vec3 N, vec3 V, vec3 L, vec3 F0,
 	kD *= 1.0 - metallic;
 
 	// scale light by NdotL
-	float NdotL = max(dot(N, L), 0.0f);
+	//float NdotL = max(dot(N, L), 0.0f);
 
 	// add to outgoing radiance Lo
-	return (kD * albedo / PI + specular) * radiance * NdotL; // note that we already multiplied the BRDF by the Fresnel (kS) so we won't multiply by kS again
+	return (kD * albedo / PI + specular) * radiance * max(dot(N, L), 0.0f); // note that we already multiplied the BRDF by the Fresnel (kS) so we won't multiply by kS again
 }
 
-Color4f RenderCorePBR::Shading(const GlobalConstantBuffer& cGlobalBuffer, const GBufferData& gBufferData, const EnvironmentTextures& gEnvironmentData) const noexcept
+// GGX/Towbridge-Reitz normal distribution function.
+// Uses Disney's reparametrization of alpha = roughness^2.
+float ndfGGX(float cosLh, float roughness)
+{
+	float alpha	  = roughness * roughness;
+	float alphaSq = alpha * alpha;
+
+	float denom = (cosLh * cosLh) * (alphaSq - 1.0) + 1.0;
+	return alphaSq / (PI * denom * denom);
+}
+
+// Single term for separable Schlick-GGX below.
+float gaSchlickG1(float cosTheta, float k)
+{
+	return cosTheta / (cosTheta * (1.0 - k) + k);
+}
+
+// Schlick-GGX approximation of geometric attenuation function using Smith's method.
+float gaSchlickGGX(float cosLi, float cosLo, float roughness)
+{
+	float r = roughness + 1.0;
+	float k = (r * r) / 8.0; // Epic suggests using this roughness remapping for analytic lights.
+	return gaSchlickG1(cosLi, k) * gaSchlickG1(cosLo, k);
+}
+
+// Shlick's approximation of the Fresnel factor.
+vec3 fresnelSchlick(vec3 F0, float cosTheta)
+{
+	return F0 + (vec3(1.0f) - F0) * pow(1.0f - cosTheta, 5.0f);
+}
+
+vec3 SunLightDirectLignting(vec3 albedo, vec3 normal, vec3 viewDir, vec3 sunDir, vec3 sunColor, float metallic, float roughness)
+{
+
+	vec3 Li		   = sunDir;
+	vec3 Lradiance = sunColor;
+	vec3 Lo		   = viewDir;
+	vec3 N		   = normal;
+
+	//vec3 albedo = vec3(1.0f);
+
+	// Half-vector between Li and Lo.
+	vec3 Lh = normalize(Li + Lo);
+
+	// Calculate angles between surface normal and various light vectors.
+	float cosLi = max(0.0f, dot(N, Li));
+	float cosLh = max(0.0f, dot(N, Lh));
+
+	// Angle between surface normal and outgoing light direction.
+	float cosLo = max(0.0f, dot(N, Lo));
+
+	// Specular reflection vector.
+	vec3 Lr = 2.0f * cosLo * N - Lo;
+	const vec3 Fdielectric = vec3(0.04);
+
+	// Fresnel reflectance at normal incidence (for metals use albedo color).
+	vec3 F0 = mix(Fdielectric, albedo, metallic);
+
+	// Calculate Fresnel term for direct lighting.
+	vec3 F = fresnelSchlick(F0, max(0.0f, dot(Lh, Lo)));
+	// Calculate normal distribution for specular BRDF.
+	float D = ndfGGX(cosLh, roughness);
+	// Calculate geometric attenuation for specular BRDF.
+	float G = gaSchlickGGX(cosLi, cosLo, roughness);
+
+	// Diffuse scattering happens due to light being refracted multiple times by a dielectric medium.
+	// Metals on the other hand either reflect or absorb energy, so diffuse contribution is always zero.
+	// To be energy conserving we must scale diffuse BRDF contribution based on Fresnel factor & metalness.
+	vec3 kd = mix(vec3(1.0) - F, vec3(0.0), metallic);
+
+	// Lambert diffuse BRDF.
+	// We don't scale by 1/PI for lighting & material units to be more convenient.
+	// See: https://seblagarde.wordpress.com/2012/01/08/pi-or-not-to-pi-in-game-lighting-equation/
+	vec3 diffuseBRDF = kd * albedo;
+
+	// Cook-Torrance specular microfacet BRDF.
+	vec3 specularBRDF = (F * D * G) / max(Epsilon, 4.0f * cosLi * cosLo);
+
+	// Total contribution for this light.
+	return (diffuseBRDF + specularBRDF) * Lradiance * cosLi;
+}
+
+Color4f RenderCorePBR::Shading(const Raytracer*			   rayTracer,
+							   const GlobalConstantBuffer& cGlobalBuffer,
+							   const GBufferData&		   gBufferData,
+							   const EnvironmentTextures&  gEnvironmentData) const noexcept
 {
 	vec3  N			= normalize(gBufferData.WorldNormal);
 	vec3  V			= normalize(cGlobalBuffer.EyePos.xyz - gBufferData.Position);
@@ -399,42 +478,27 @@ Color4f RenderCorePBR::Shading(const GlobalConstantBuffer& cGlobalBuffer, const 
 		vec3  L			  = normalize(lightPos - WorldPos);
 		vec3  H			  = normalize(V + L);
 		float distance	  = length(lightPos - WorldPos);
+		/*if (distance > 300)
+			continue;*/
 		float attenuation = 1.0 / (distance * distance);
 		vec3  radiance	  = lightColor * attenuation;
 
-
-		Lo += CalculateLight(albedo, radiance, N, V, L, F0, metallic, roughness);
-		//// Cook-Torrance BRDF
-		//float NDF = D_GGX(N, H, roughness);
-		//float G	  = GeometrySmith(N, V, L, roughness);
-		//vec3  F	  = F_Schlick(clamp(dot(H, V), 0.0f, 1.0f), F0);
-
-		//vec3  numerator	  = NDF * G * F;
-		//float denominator = 4.0f * max(dot(N, V), 0.0f) * max(dot(N, L), 0.0f) + 0.0001f; // + 0.0001 to prevent divide by zero
-		//vec3  specular	  = numerator / denominator;
-
-		//// kS is equal to Fresnel
-		//vec3 kS = F;
-		//// for energy conservation, the diffuse and specular light can't
-		//// be above 1.0 (unless the surface emits light); to preserve this
-		//// relationship the diffuse component (kD) should equal 1.0 - kS.
-		//vec3 kD = vec3(1.0) - kS;
-		//// multiply kD by the inverse metalness such that only non-metals
-		//// have diffuse lighting, or a linear blend if partly metal (pure metals
-		//// have no diffuse light).
-		//kD *= 1.0 - metallic;
-
-		//// scale light by NdotL
-		//float NdotL = max(dot(N, L), 0.0f);
-
-		//// add to outgoing radiance Lo
-		//Lo += (kD * albedo / PI + specular) * radiance * NdotL; // note that we already multiplied the BRDF by the Fresnel (kS) so we won't multiply by kS again
+		if (!rayTracer->IsShadowRay(gBufferData.Position, lightPos))
+		{
+			Lo += glm::max(vec3(0), CalculateLight(albedo, radiance, N, V, L, F0, metallic, roughness));
+		}
 	}
 
 	// Add directional light
 	{
-		vec3 L = vec3(-1.0f, 1, -1.0f);
-		Lo += CalculateLight(albedo, vec3(1.0, 1.0, 1.0), N, V, L, F0, metallic, roughness);
+		vec3 sunDir	  = -1.0f * glm::normalize(cGlobalBuffer.SunLight);
+		vec3 sunColor = cGlobalBuffer.SunLightColor.xyz;
+
+		vec3 to = gBufferData.Position + sunDir * 50.0f;
+		 if (!rayTracer->IsShadowRay(gBufferData.Position, to))
+		{
+			Lo += SunLightDirectLignting(albedo, N, V, sunDir, sunColor, metallic, roughness);
+		}
 	}
 
 	// ambient lighting (we now use IBL as the ambient term)
@@ -459,7 +523,8 @@ Color4f RenderCorePBR::Shading(const GlobalConstantBuffer& cGlobalBuffer, const 
 	vec3 color = ambient + Lo;
 
 	// HDR tonemapping
-	color = color / (color + vec3(1.0));
+	//color = color / (color + vec3(1.0));
+	color = ACESToneMapping(color /* * 4.5f*/, 1.0f);
 	// gamma correct
 	color = pow(color, vec3(1.0 / 2.2));
 
@@ -467,9 +532,10 @@ Color4f RenderCorePBR::Shading(const GlobalConstantBuffer& cGlobalBuffer, const 
 	return vec4(color, 1.0);
 }
 
-Color4f RenderCoreSkybox::Execute(const GlobalConstantBuffer& cGlobalBuffer,
-				const VertexOutputData&		vertexData,
-				class Material*				material) noexcept
+Color4f RenderCoreSkybox::Execute(const Raytracer*			  rayTracer,
+								  const GlobalConstantBuffer& cGlobalBuffer,
+								  const VertexOutputData&	  vertexData,
+								  class Material*			  material) noexcept
 {
 	auto	  evnTexture = GetEnvironmentData()->EnvTexture;
 	glm::vec4 viewPos	 = cGlobalBuffer.ViewMatrix * glm::vec4(vertexData.Position, 1.0f);
@@ -479,16 +545,34 @@ Color4f RenderCoreSkybox::Execute(const GlobalConstantBuffer& cGlobalBuffer,
 	glm::mat4 skyboxViewMatrix = glm::mat4(glm::mat3(cGlobalBuffer.ViewMatrix));
 	glm::vec3 skyboxCoords	   = glm::vec3(skyboxViewMatrix * glm::vec4(viewCoords, 1.0f));
 
-	// return { 0.2f, 0.2f, 0, 1 };
 	vec3 color = textureCubeLod(evnTexture, vertexData.Position.xyz, 0).rgb;
-	// color	   = glm::pow(color, vec3(2.2f));
-
-	//	// HDR tonemapping
-	// color = color / (color + vec3(1.0));
-	//// gamma correct
-	// color = pow(color, vec3(1.0 / 2.2));
-
 	auto FragColor = vec4(color, 1.0);
-
 	return FragColor;
+}
+
+
+Color4f RenderCoreUnlitExecute(const Raytracer*			   rayTracer,
+							   const GlobalConstantBuffer& cGlobalBuffer,
+							   const VertexOutputData&	   vertexData,
+							   class Material*			   material) noexcept
+{
+	auto abledoTexture = material->GetTexture("tAlbedo");
+	vec2 uv			   = vertexData.Texcoord0;
+	// Get from Material
+	ShadingBuffer cShadingBuffer = material->GetShadingBuffer();
+
+	static RxSampler* sampler = RxSampler::CreateSampler(RxSamplerType::Linear, RxWrapMode::Repeat);
+
+	if (abledoTexture)
+	{
+		return sampler->ReadPixel(abledoTexture.get(), uv.x, uv.y);
+	}
+	else if (material->HasParameter("baseColorFactor"))
+	{
+		return material->GetVec4("baseColorFactor");
+	}
+	else
+	{
+		return vec4(1.0f);
+	}
 }
