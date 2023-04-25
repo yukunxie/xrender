@@ -7,6 +7,41 @@
 
 #include <list>
 
+// 给C++生成一宏，自动生成类中成员变量的getter, setter方法
+#define GETSET(type, varName, funName)        \
+private:                                      \
+	type varName_;                            \
+                                              \
+public:                                       \
+	inline type Get##funName(void) const      \
+	{                                         \
+		return varName_;                      \
+	}                                         \
+                                              \
+public:                                       \
+	inline void Set##funName(const type& var) \
+	{                                         \
+		varName_ = var;                       \
+	}
+
+// 给C++生成一宏，自动生成类中成员变量的getter, setter方法
+#define GETSET_BOOL(VarName)            \
+public:                                 \
+	inline bool Is##VarName(void) const \
+	{                                   \
+		return Is##VarName##_;          \
+	}                                   \
+                                        \
+public:                                 \
+	inline void Set##VarName(bool var)  \
+	{                                   \
+		Is##VarName##_ = var;           \
+	}                                   \
+                                        \
+protected:                              \
+	bool Is##VarName##_
+
+
 class MeshComponent;
 
 struct RTInstanceData
@@ -114,13 +149,19 @@ public:
 	void SetPhysicsData(void* data) { PhysicsData_ = data; }
 
 protected:
-	Entity* Parent_ = nullptr;
-	void* PhysicsData_ = nullptr;
-	std::vector<Entity*> Children_;
+	Entity*				  Parent_	   = nullptr;
+	void*				  PhysicsData_ = nullptr;
+	std::vector<Entity*>  Children_;
 	std::list<Component*> Components_;
-	mutable TMat4x4 WorldMatrix_;
-	Transform Transform_;
+	mutable TMat4x4		  WorldMatrix_;
+	Transform			  Transform_;
 	// boolean fileds
-	bool IsSelected_ = false;
-	mutable bool IsTransformDirty_ = true;
+	bool		 IsSelected_		 = false;
+	mutable bool IsTransformDirty_	 = true;
+
+	// Get Set Property
+protected:
+	GETSET_BOOL(CastShadow) = true;
+	GETSET_BOOL(RecieveShadow) = true;
+	GETSET_BOOL(IngoreSelfShadow) = true;
 };

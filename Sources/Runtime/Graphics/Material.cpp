@@ -551,7 +551,7 @@ Color4f RenderCoreSkybox::Execute(const Raytracer*			  rayTracer,
 }
 
 
-Color4f RenderCoreUnlitExecute(const Raytracer*			   rayTracer,
+Color4f RenderCoreUnlit::Execute(const Raytracer*			   rayTracer,
 							   const GlobalConstantBuffer& cGlobalBuffer,
 							   const VertexOutputData&	   vertexData,
 							   class Material*			   material) noexcept

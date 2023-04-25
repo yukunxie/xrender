@@ -40,6 +40,13 @@ typedef std::vector<std::uint8_t> TData;
 #define M_PI 3.141592653589793f
 #endif
 
+enum EMeshRayHitFlags : uint32
+{
+	EMeshRayHitFlags_Render		   = 1 << 0,
+	EMeshRayHitFlags_CastShadow	   = 1 << 1,
+	EMeshRayHitFlags_RecieveShadow = 1 << 2,
+};
+
 //struct Vector2f : public glm::vec2
 //{
 //public:

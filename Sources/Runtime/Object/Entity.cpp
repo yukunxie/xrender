@@ -172,6 +172,11 @@ void Entity::AddToEmbreeScene(RTCDevice device_i, RTCScene scene_i)
 		unsigned int* index = (unsigned int*)rtcSetNewGeometryBuffer(rtcMesh, RTC_BUFFER_TYPE_INDEX, 0, RTC_FORMAT_UINT3, 3 * sizeof(unsigned int), indices.size() / 3);
 		memcpy(index, indices.data(), sizeof(indices[0]) * indices.size());
 
+		uint32 flags = EMeshRayHitFlags_Render;
+		if (IsCastShadow())
+		{
+			flags |= EMeshRayHitFlags_CastShadow;
+		}
 		rtcCommitGeometry(rtcMesh);
 
 		unsigned int geomID = rtcAttachGeometry(instanceScene, rtcMesh);
