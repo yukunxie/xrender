@@ -105,20 +105,16 @@ Vector3f interpolateNormal(float u, float v, Vector3f p0, Vector3f p1, Vector3f 
 	return {};
 }
 
-static bool _ProcessRayHitResult(const Raytracer* rayTracer, const GlobalConstantBuffer& cGlobalBuffer, vec3 viewDir, vec2 uv, int instanceId, int geomID, int primID, Color4f & fragColor)
+static bool _ProcessRayHitResult(const Raytracer* rayTracer, const GlobalConstantBuffer& cGlobalBuffer, vec3 viewDir, vec2 uv, vec3 ng, int instanceId, int geomID, int primID, RenderOutputData & output)
 {
-	//Assert(geomID != RTC_INVALID_GEOMETRY_ID);
-
-	if (instanceId == RTC_INVALID_GEOMETRY_ID)
+	if (instanceId < 0 || geomID < 0 || primID < 0)
 	{
-		fragColor = Color4f(1.0f, 0.0f, 1.0f, 1.0f);
+		output.Color = Color4f(1.0f, 0.0f, 1.0f, 1.0f);
 		return true;
 	}
-	else/* if (instanceId != 0)*/
+	else
 	{
 		auto meshProxy = GMeshComponentProxies[instanceId].MeshComponents[geomID];
-
-		//return Color4f(meshProxy->GetDebugColor(), 1.0f);
 
 		Material* material = meshProxy->GetMaterial();
 
@@ -130,10 +126,10 @@ static bool _ProcessRayHitResult(const Raytracer* rayTracer, const GlobalConstan
 
 		const TMat4x4 & worldMatrix =  meshProxy->GetOwner()->GetWorldMatrix();
 
-		const VertexOutputData& vertexData = RenderCore::InterpolateAttributes(vec2(u, v), worldMatrix, meshProxy->GetGeometry(), primID);
+		const VertexOutputData& vertexData = RenderCore::InterpolateAttributes(vec2(u, v), ng, worldMatrix, meshProxy->GetGeometry(), primID);
 
 		Vector3f p0, p1, p2;
-		std::tie(p0, p1, p2) = meshProxy->GetGeometry()->GetTripleAttributesByIndex<Vector3f>(VertexBufferAttriKind::NORMAL, v0, v1, v2);
+		meshProxy->GetGeometry()->GetTripleAttributesByIndex<Vector3f>(VertexBufferAttriKind::NORMAL, v0, v1, v2, p0, p1, p2);
 
 		vec3 N = glm::cross(p1 - p0, p2 - p0);
 
@@ -143,30 +139,9 @@ static bool _ProcessRayHitResult(const Raytracer* rayTracer, const GlobalConstan
 			isBackSurface = true;
 		}
 
-		fragColor = material->GetRenderCore()->Execute(rayTracer, cGlobalBuffer, vertexData, material);
+		output = material->GetRenderCore()->Execute(rayTracer, cGlobalBuffer, vertexData, material);
 		return !isBackSurface || material->GetDoubleSide();
 	}
-	//else if (geomID == 0)
-	//{
-	//	/*auto meshProxy = GMeshComponentProxies[geomID];
-
-	//	float u = uv.x;
-	//	float v = uv.y;
-
-	//	uint32 v0, v1, v2;
-	//	std::tie(v0, v1, v2) = meshProxy->GetGeometry()->GetIndexBuffer()->GetVerticesByPrimitiveId(primID);
-
-	//	Vector3f p0 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::POSITION, v0);
-	//	Vector3f p1 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::POSITION, v1);
-	//	Vector3f p2 = meshProxy->GetGeometry()->GetAttributeByIndex<Vector3f>(VertexBufferAttriKind::POSITION, v2);
-
-	//	Vector3f pos = u * p0 + v * p1 + (1 - u - v) * p2;
-
-	//	fragColor = pbrRender.RenderSkybox(cGlobalBuffer, (pos));*/
-
-	//	fragColor = Color4f(0.0, 0.0, 1.0, 1.0);
-	//	return true;
-	//}
 }
 
 std::vector<TiledTaskData> GenerateTasks(size_t width, size_t height, size_t tileSize)
@@ -296,19 +271,34 @@ void Raytracer::ProcessTask(const TiledTaskData& task, const embree::ISPCCamera&
 			float y = GET_RTC_PARAM(rayhits.ray.dir_y, b);
 			float z = GET_RTC_PARAM(rayhits.ray.dir_z, b);
 
-			// The triange is CCW£¬ so we need to invert the u and v
-			float v = GET_RTC_PARAM(rayhits.hit.u, b);
-			float u = GET_RTC_PARAM(rayhits.hit.v, b);
+			// The triange is CCW
+			float u = GET_RTC_PARAM(rayhits.hit.u, b);
+			float v = GET_RTC_PARAM(rayhits.hit.v, b);
 
-			int		primID = GET_RTC_PARAM(rayhits.hit.primID, b);
-			int		geomID = GET_RTC_PARAM(rayhits.hit.geomID, b);
+			int		primID	   = GET_RTC_PARAM(rayhits.hit.primID, b);
+			int		geomID	   = GET_RTC_PARAM(rayhits.hit.geomID, b);
 			int		instanceId = GET_RTC_PARAM(rayhits.hit.instID[0], b);
-			Color4f fragColor;
-			bool	isValidSurface = _ProcessRayHitResult(this, mContext.GlobalParameters, vec3(x, y, z), vec2(u, v), instanceId, geomID, primID, fragColor);
+			float	ng_x	   = GET_RTC_PARAM(rayhits.hit.Ng_x, b);
+			float	ng_y	   = GET_RTC_PARAM(rayhits.hit.Ng_y, b);
+			float	ng_z	   = GET_RTC_PARAM(rayhits.hit.Ng_z, b);
+			RenderOutputData renderOutputData;
+			bool			 isValidSurface = _ProcessRayHitResult(this, mContext.GlobalParameters, vec3(x, y, z), vec2(u, v), vec3(ng_x, ng_y, ng_z), instanceId, geomID, primID, renderOutputData);
+
+			/*auto ViewMatrix = mContext.GlobalParameters.ViewMatrix;
+			auto ProjMatrix = mContext.GlobalParameters.ProjMatrix;
+			auto mvp		= ProjMatrix * ViewMatrix;
+			vec4 np			= mvp * vec4(renderOutputData.WorldPosition, 1.0f);
+			np /= np.w;
+			np.xyz = np.xyz * 0.5f + 0.5f;
+			w	   = glm::clamp(int(np.x * width), 0, width - 1);
+			h	   = glm::clamp(int((1 - np.y) * height), 0, height - 1);*/
+			
 			// if (!isValidSurface)
 			{
-				mContext.RenderTargetColor.get()->WritePixel(w, h, fragColor);
+				mContext.RenderTargetColor.get()->WritePixel(w, h, renderOutputData.Color);
+				mContext.RenderTargetDepth.get()->WritePixel(w, h, vec4(vec3(renderOutputData.Depth), 1.0f));
 			}
+			
 		}
 	}
 }
@@ -333,4 +323,80 @@ bool Raytracer::IsShadowRay(vec3 from, vec3 to) const noexcept
 	rtcIntersect1(mContext.RTScene, &rayhit);
 
 	return rayhit.hit.instID[0] != 0 && (rayhit.hit.instID[0] != RTC_INVALID_GEOMETRY_ID);
+}
+
+RxIntersection Raytracer::Intersection(const RxRay& ray) const noexcept
+{
+	RTCRayHit rayhit;
+	vec3	  dir		 = ray.Direction;
+	rayhit.ray.org_x	 = ray.Origion.x;
+	rayhit.ray.org_y	 = ray.Origion.y;
+	rayhit.ray.org_z	 = ray.Origion.z;
+	rayhit.ray.dir_x	 = ray.Direction.x;
+	rayhit.ray.dir_y	 = ray.Direction.y;
+	rayhit.ray.dir_z	 = ray.Direction.z;
+	rayhit.ray.tnear	 = 0.0f;
+	rayhit.ray.tfar		 = ray.MaxDistance;
+	rayhit.ray.time		 = 1;
+	rayhit.ray.flags	 = 0;
+	rayhit.ray.mask		 = ray.Mask;
+	rayhit.hit.geomID	 = RTC_INVALID_GEOMETRY_ID;
+	rayhit.hit.instID[0] = RTC_INVALID_GEOMETRY_ID;
+
+	rtcIntersect1(mContext.RTScene, &rayhit);
+
+	RxIntersection result;
+	result.Ray		  = ray;
+	result.InstanceID = rayhit.hit.instID[0];
+	result.GeomID	  = rayhit.hit.geomID;
+	result.PrimID	  = rayhit.hit.primID;
+	result.Barycenter = { rayhit.hit.u, rayhit.hit.v };
+
+	result.IsHit = rayhit.hit.instID[0] != RTC_INVALID_GEOMETRY_ID && (rayhit.hit.instID[0] != RTC_INVALID_GEOMETRY_ID);
+
+	return result;
+}
+
+vec2 RxIntersection::SampleBRDF(const RTContext& context) noexcept
+{
+	auto	  meshProxy = GMeshComponentProxies[InstanceID].MeshComponents[GeomID];
+	Material* material	= meshProxy->GetMaterial();
+
+	const TMat4x4&			worldMatrix = meshProxy->GetOwner()->GetWorldMatrix();
+	const VertexOutputData& vertexData	= RenderCore::InterpolateAttributes(Barycenter, vec3(1, 1, 1), worldMatrix, meshProxy->GetGeometry(), PrimID);
+
+	auto abledoTexture	  = material->GetTexture("tAlbedo");
+	auto matTexture		  = material->GetTexture("tMetallicRoughnessMap");
+	auto normalTexture	  = material->GetTexture("tNormalMap");
+	auto emissiveTexture  = material->GetTexture("tEmissiveMap");
+
+	return vec2{0};
+}
+
+void RxIntersection::SampleAttributes(const RTContext& context, VertexOutputData& vertexData, float& roughness, float& metallic)
+{
+	auto	  meshProxy = GMeshComponentProxies[InstanceID].MeshComponents[GeomID];
+	Material* material	= meshProxy->GetMaterial();
+
+	const TMat4x4&			worldMatrix = meshProxy->GetOwner()->GetWorldMatrix();
+	vertexData	= RenderCore::InterpolateAttributes(Barycenter, vec3(1, 1, 1), worldMatrix, meshProxy->GetGeometry(), PrimID);
+
+	auto abledoTexture	 = material->GetTexture("tAlbedo");
+	auto matTexture		 = material->GetTexture("tMetallicRoughnessMap");
+	auto normalTexture	 = material->GetTexture("tNormalMap");
+	auto emissiveTexture = material->GetTexture("tEmissiveMap");
+
+	static RxSampler* sampler = RxSampler::CreateSampler(RxSamplerType::Linear, RxWrapMode::Repeat);
+
+	if (matTexture)
+	{
+		vec4 mat11 = sampler->ReadPixel(matTexture.get(), Barycenter.x, Barycenter.y);
+		roughness  = mat11.g;
+		metallic   = mat11.b;
+	}
+	else
+	{
+		roughness = material->GetFloat("roughnessFactor");
+		metallic  = material->GetFloat("metallicFactor");
+	}
 }

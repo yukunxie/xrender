@@ -33,6 +33,7 @@ struct LightData
 {
 	Vector3f Position;
 	Vector3f Color;
+	Vector3f ShapeColor;
 };
 
 struct GlobalConstantBuffer
@@ -42,6 +43,7 @@ struct GlobalConstantBuffer
 	Vector4f			   SunLightColor;
 	TMat4x4				   ViewMatrix;
 	TMat4x4				   ProjMatrix;
+	TMat4x4				   ViewProjMatrix;
 	std::vector<LightData> Lights;
 };
 
@@ -67,6 +69,14 @@ struct VertexOutputData
 	vec3 BiTangent;
 };
 
+struct RenderOutputData
+{
+	vec4  Color;
+	float Depth;
+	vec3  WorldPosition;
+	vec3  Normal;
+};
+
 struct BatchBuffer
 {
 	TMat4x4 WorldMatrix;
@@ -86,10 +96,10 @@ public:
 		return barycenter.x * p1 + barycenter.y * p2 + (1.0f - barycenter.x - barycenter.y) * p2;
 	}
 
-	static VertexOutputData InterpolateAttributes(vec2 barycenter, const TMat4x4& worldMatrix, const Geometry* mesh, int primId) noexcept;
+	static VertexOutputData InterpolateAttributes(vec2 barycenter, vec3 ng, const TMat4x4& worldMatrix, const Geometry* mesh, int primId) noexcept;
 
 public:
-	virtual Color4f Execute(const Raytracer*			rayTracer,
+	virtual RenderOutputData Execute(const Raytracer*			 rayTracer,
 							const GlobalConstantBuffer& cGlobalBuffer,
 							const VertexOutputData&		vertexData,
 							class Material*				material) noexcept = 0;
@@ -98,13 +108,13 @@ public:
 class RenderCorePBR : public RenderCore
 {
 public:
-	Color4f Execute(const Raytracer*			rayTracer,
+	RenderOutputData Execute(const Raytracer*			 rayTracer,
 					const GlobalConstantBuffer& cGlobalBuffer,
 					const VertexOutputData&		vertexData,
 					class Material*				material) noexcept override;
 
 protected:
-	Color4f Shading(const Raytracer*			rayTracer,
+	RenderOutputData Shading(const Raytracer*			 rayTracer,
 					const GlobalConstantBuffer& cGlobalBuffer,
 					const GBufferData&			gBufferData,
 					const EnvironmentTextures&	gEnvironmentData) const noexcept;
@@ -113,7 +123,7 @@ protected:
 class RenderCoreSkybox : public RenderCore
 {
 public:
-	Color4f Execute(const Raytracer*			rayTracer,
+	RenderOutputData Execute(const Raytracer*			 rayTracer,
 					const GlobalConstantBuffer& cGlobalBuffer,
 					const VertexOutputData&		vertexData,
 					class Material*				material) noexcept override;
@@ -122,7 +132,7 @@ public:
 class RenderCoreUnlit : public RenderCore
 {
 public:
-	Color4f Execute(const Raytracer*			rayTracer,
+	RenderOutputData Execute(const Raytracer*			 rayTracer,
 					const GlobalConstantBuffer& cGlobalBuffer,
 					const VertexOutputData&		vertexData,
 					class Material*				material) noexcept override;

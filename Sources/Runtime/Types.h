@@ -27,6 +27,12 @@ typedef std::uint64_t uint64;
 
 typedef std::vector<std::uint8_t> TData;
 
+template<typename T0, typename T1>
+T1 madd(T0 x, T1 y, T1 z)
+{
+	return (x * y) + z;
+}
+
 #ifdef _DEBUG
 #	ifndef Assert
 #		define Assert(cond, ...) assert(cond)
@@ -46,90 +52,6 @@ enum EMeshRayHitFlags : uint32
 	EMeshRayHitFlags_CastShadow	   = 1 << 1,
 	EMeshRayHitFlags_RecieveShadow = 1 << 2,
 };
-
-//struct Vector2f : public glm::vec2
-//{
-//public:
-//	Vector2f(const Vector2f& rhs)
-//		:glm::vec2(rhs.x, rhs.y)
-//	{
-//	}
-//
-//	template<typename... Args>
-//	Vector2f(const Args&... args)
-//		: glm::vec2(args...)
-//	{
-//	}
-//
-//	float operator*(const Vector2f& rhs)
-//	{
-//		return x * rhs.x + y * rhs.y;
-//	}
-//};
-//
-//struct Vector3f : public glm::vec3
-//{
-//public:
-//	Vector3f(const Vector3f& rhs)
-//		: glm::vec3(rhs.x, rhs.y, rhs.z)
-//	{
-//	}
-//	template<typename... Args>
-//	Vector3f(const Args&... args)
-//		: glm::vec3(args...)
-//	{
-//	}
-//
-//	Vector3f(const Vector2f& rhs, float z)
-//		: glm::vec3(rhs.x, rhs.y, z)
-//	{
-//	}
-//
-//	float operator*(const Vector3f& rhs)
-//	{
-//		return x * rhs.x + y * rhs.y + z * rhs.z ;
-//	}
-//};
-//
-//struct Vector4f: public glm::vec4
-//{
-//public:
-//	Vector4f(const Vector4f& rhs)
-//		: glm::vec4(rhs.x, rhs.y, rhs.z, rhs.w)
-//	{
-//	}
-//
-//	template<typename ...Args>
-//	Vector4f(const Args&... args)
-//		: glm::vec4(args...)
-//	{
-//	}
-//
-//	Vector4f(const Vector2f& rhs, float z, float w)
-//		: glm::vec4(rhs.x, rhs.y, z, w)
-//	{
-//	}
-//
-//	Vector4f(const Vector3f& rhs, float w)
-//		: glm::vec4(rhs.x, rhs.y, rhs.z, w)
-//	{
-//	}
-//
-//	Vector3f xyz() const
-//	{
-//		return Vector3f(x, y, z);
-//	}
-//
-//	Vector2f xy() const
-//	{
-//		return Vector2f(x, y);
-//	}
-//
-//	float operator*(const Vector4f& rhs)
-//	{
-//		return x * rhs.x + y * rhs.y + z * rhs.z + w * rhs.w;
-//	}
-//};
 
 typedef glm::vec2 Vector2f;
 typedef glm::vec3 Vector3f;
@@ -172,7 +94,7 @@ struct CameraInfo
 
 struct Triangle
 {
-	int v0, v1, v2;
+	uint32 v0, v1, v2;
 };
 
 struct TriangleUint16

@@ -196,19 +196,20 @@ void Entity::AddToEmbreeScene(RTCDevice device_i, RTCScene scene_i)
 	Assert(false == GMeshComponentProxies.contains(rtInstanceData.InstanceId));
 	GMeshComponentProxies[rtInstanceData.InstanceId] = rtInstanceData;
 
-	embree::AffineSpace3fa instance_xfm;
-
 	const auto scale	 = GetScale();
 	const auto rotate	 = GetRotation();
 	const auto translate = GetPosition();
 
-	instance_xfm.scale(embree::Vec3f(scale.x, scale.y, scale.z));
-	// instance_xfm.rotate(embree::Vec3f(rotate.x, rotate.y, rotate.z));
+	embree::AffineSpace3fa t = embree::AffineSpace3fa::translate(embree::Vec3f(translate.x, translate.y, translate.z));
+	embree::AffineSpace3fa s = embree::AffineSpace3fa::scale(embree::Vec3f(scale.x, scale.y, scale.z));
+	embree::AffineSpace3fa r = embree::AffineSpace3fa::rotate(embree::Vec3f(1, 0, 0), rotate.x) 
+		* embree::AffineSpace3fa::rotate(embree::Vec3f(0, 1, 0), rotate.y) 
+		* embree::AffineSpace3fa::rotate(embree::Vec3f(0, 0, 1), rotate.z);
 
-	instance_xfm = embree::AffineSpace3fa::scale(embree::Vec3f(scale.x, scale.y, scale.z)) * embree::AffineSpace3fa::translate(embree::Vec3f(translate.x, translate.y, translate.z));
+	embree::AffineSpace3fa instance_xfm = r * s * t;
 	rtcSetGeometryTransform(entityInstance, 0, RTC_FORMAT_FLOAT4X4_COLUMN_MAJOR, &instance_xfm);
 
-	rtcReleaseGeometry(entityInstance);
+	//rtcReleaseGeometry(entityInstance);
 	rtcCommitGeometry(entityInstance);
     
 }

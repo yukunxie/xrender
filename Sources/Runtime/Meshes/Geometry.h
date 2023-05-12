@@ -55,17 +55,19 @@ public:
     }
 
     template<typename Ty_>
-	std::tuple<Ty_, Ty_, Ty_> GetTripleAttributesByIndex(VertexBufferAttriKind kind, uint32 idx0, uint32 idx1, uint32 idx2) const
+	void GetTripleAttributesByIndex(VertexBufferAttriKind kind, uint32 idx0, uint32 idx1, uint32 idx2, Ty_& v0, Ty_& v1, Ty_& v2 ) const
 	{
 		for (auto vb : vbStreams_)
 		{
 			if (vb->kind == kind)
 			{
 				std::span<Ty_> view = { (Ty_*)vb->buffer.data(), vb->buffer.size() / sizeof(Ty_) };
-				return { view[idx0], view[idx1], view[idx2] };
+				v0 = view[idx0];
+				v1 = view[idx1];
+				v2 = view[idx2];
 			}
 		}
-		return { Ty_{}, Ty_{}, Ty_{} };
+		//return { Ty_{}, Ty_{}, Ty_{} };
 	}
 
     const IndexBuffer* GetIndexBuffer() const 

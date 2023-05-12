@@ -337,7 +337,7 @@ namespace GLTFLoader
 		if (tNode.translation.size() >= 3)
 			model->GetPosition() = { (float)tNode.translation[0], (float)tNode.translation[1], (float)tNode.translation[2] };
 		if (tNode.scale.size() >= 3)
-			model->GetScale() = { (float)tNode.scale[0], (float)tNode.scale[1], (float)tNode.scale[2] };
+			model->SetScale({ (float)tNode.scale[0], (float)tNode.scale[1], (float)tNode.scale[2] });
 		if (tNode.rotation.size() >= 4)
 		{
 			// !! caution: wxyz!!

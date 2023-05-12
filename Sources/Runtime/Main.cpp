@@ -34,7 +34,8 @@
 #include "Loader/GLTFLoader.h"
 #include "XRenderer.h"
 #include "Graphics/Material.h"
-#include "Raytracer.h"
+#include "PathTracer/Raytracer.h"
+#include "PathTracer/PhotonMapping.h"
 #include "Renderer/PBRRender.h"
 
 std::map<int, RTInstanceData> GMeshComponentProxies;
@@ -50,8 +51,23 @@ void AddEntityToEmbreeScene(RTCDevice device_i, RTCScene scene_i, const std::vec
 int width  = 1024;
 int height = 1024;
 
+vec3 GetRandomColor()
+{
+	static std::random_device				rd;
+	static std::mt19937						gen(32);
+	static std::uniform_real_distribution<> dis(0, 1);
+
+	float r1 = dis(gen);
+	float r2 = dis(gen);
+	float r3 = dis(gen);
+
+	return vec3(r1, r2, r3);
+}
+
+
 int main()
 {
+	std::cout << "Please use CounterClockWise CCW Triangle and Right Handness" << std::endl;
 	// init global texturs;
 	{
 		EnvironmentTextures* envTextures = GetEnvironmentData();
@@ -98,17 +114,18 @@ int main()
 	}
 #else
 	{
-		auto	cubeMesh = MeshComponentBuilder::CreateBox("");
+		auto	cubeMesh = MeshComponentBuilder::CreatePlane();
 		Entity* plane	 = new Entity();
 		plane->AddComponment(cubeMesh);
 		std::vector<Entity*> entities = { plane };
-		entities[0]->SetScale(vec3(1000, 1.0f, 1000));
+		entities[0]->SetScale(vec3(2000, 1.0f, 2000));
 		entities[0]->SetPosition(vec3(0, -1.0f, 0));
-		MeshComponent* mesh = entities[0]->GetComponent<MeshComponent>();
+		MeshComponent* mesh		 = entities[0]->GetComponent<MeshComponent>();
 		float		   roughness = 0.9f;
 		float		   metallic	 = 0.1f;
 		mesh->GetMaterial()->SetFloat("roughnessFactor", 0, 1, &roughness);
 		mesh->GetMaterial()->SetFloat("metallicFactor", 0, 1, &metallic);
+
 		AddEntityToEmbreeScene(device, scene, entities);
 	}
 #endif
@@ -131,17 +148,19 @@ int main()
 	Vector3f			 up	   = { 0, 1, 0 };
 	float				 fov   = 60;
 
+
 	GlobalConstantBuffer cGlobalBuffer;
 	{
-		cGlobalBuffer.EyePos		= Vector4f(pos.x, pos.y, pos.z, 1.0f);
-		cGlobalBuffer.SunLight		= Vector4f(.0f, -1.0f, 0.0f, 0.0f);
-		cGlobalBuffer.SunLightColor = Vector4f(1.0f, 1.0f, 1.0f, 1.0f);
-		cGlobalBuffer.ViewMatrix	= glm::lookAtRH(pos, focus, up);
-		cGlobalBuffer.ProjMatrix	= glm::perspectiveFovRH(fov, float(width), float(height), 0.1f, 20000.0f);
+		cGlobalBuffer.EyePos		 = Vector4f(pos.x, pos.y, pos.z, 1.0f);
+		cGlobalBuffer.SunLight		 = Vector4f(.0f, -1.0f, 0.0f, 0.0f);
+		cGlobalBuffer.SunLightColor	 = Vector4f(1.0f, 1.0f, 1.0f, 1.0f);
+		cGlobalBuffer.ViewMatrix	 = glm::lookAtRH(pos, focus, up);
+		cGlobalBuffer.ProjMatrix	 = glm::perspectiveFovRH(glm::radians(fov), float(width), float(height), 0.1f, 200.0f);
+		cGlobalBuffer.ViewProjMatrix = cGlobalBuffer.ProjMatrix * cGlobalBuffer.ViewMatrix;
 
 
-		glm::vec3 center(0.0f, 5.0f, 0.0f); // 立方体中心位置
-		float	  length = 10.0f;			// 立方体边长的一半
+		glm::vec3 center(0.0f, 3.0f, 0.0f); // 立方体中心位置
+		float	  length = 5.0f;			// 立方体边长的一半
 		vec3	  pointLightColor = vec3(100.0f, 100.0f, 100.0f);
 
 		for (int i = 0; i < 5; ++i)
@@ -149,34 +168,22 @@ int main()
 			for (int j = 0; j < 5; ++j)
 			{
 				glm::vec3 vertex0(center.x + length * (i - 2), center.y, center.z + length * (j - 2));
-				cGlobalBuffer.Lights.emplace_back(vertex0, pointLightColor);
+				vec3	  randomColor = GetRandomColor();
+				cGlobalBuffer.Lights.emplace_back(vertex0, pointLightColor , randomColor);
 			}
 		}
 
-		//// 定义8个顶点坐标
-		//glm::vec3 vertex0(center.x - length, center.y - length, center.z - length);
-		//glm::vec3 vertex1(center.x + length, center.y - length, center.z - length);
-		//glm::vec3 vertex2(center.x - length, center.y + length, center.z - length);
-		//glm::vec3 vertex3(center.x + length, center.y + length, center.z - length);
-		//glm::vec3 vertex4(center.x - length, center.y - length, center.z + length);
-		//glm::vec3 vertex5(center.x + length, center.y - length, center.z + length);
-		//glm::vec3 vertex6(center.x - length, center.y + length, center.z + length);
-		//glm::vec3 vertex7(center.x + length, center.y + length, center.z + length);
 
-		// 将8个顶点坐标放入一个std::vector列表中
-		//std::vector<glm::vec3> vertices = { vertex0, vertex1, vertex2, vertex3, vertex4, vertex5, vertex6, vertex7 };
-
-		// cGlobalBuffer.Lights.emplace_back(center, vec3(100.0f, 100.0f, 100.0f));
-
-	/*	for (auto pos : vertices)
-		{
-			cGlobalBuffer.Lights.emplace_back(pos, vec3(100.0f, 100.0f, 100.0f));
-		}*/
-
+#if 0
 		// create point light shape
 		for (const auto& light : cGlobalBuffer.Lights)
 		{
 			auto	lightShape = MeshComponentBuilder::CreateSphere();
+			Material *mat = lightShape->GetMaterial();
+			vec4	  baseColor	 = vec4(light.ShapeColor.xyz, 1.0f);
+			mat->SetFloat("baseColorFactor", 0, 4, &baseColor.x);
+			vec4 emissiveColor = vec4(0);
+			mat->SetFloat("emissiveFactor", 0, 4, &emissiveColor.x);
 			lightShape->GetMaterial()->SetRenderCore(std::make_shared<RenderCoreUnlit>());
 			Entity* entity	 = new Entity();
 			entity->AddComponment(lightShape);
@@ -185,29 +192,20 @@ int main()
 			entity->SetCastShadow(false);
 			entity->SetRecieveShadow(false);
 			AddEntityToEmbreeScene(device, scene, { entity });
+
+			const auto& wp = entity->GetWorldMatrix();
+
+			vec4 z = wp * vec4(0, 0, 0, 1.0f);
+			if (true)
+				;
 		}
+#endif
 	}
+
 	rtcCommitScene(scene);
 
-	glm::vec3 cameraFront = glm::normalize(focus - pos);
 
-	RTCRayQueryContext context;
-	void*			   userRayExt = nullptr; //!< can be used to pass extended ray data to callbacks
-	void*			   tutorialData;
-
-	rtcInitRayQueryContext(&context);
-	// context.tutorialData = (void*)&data;
-
-	RTCIntersectArguments args;
-	rtcInitIntersectArguments(&args);
-	args.context	  = &context;
-	args.flags		  = RTC_RAY_QUERY_FLAG_INCOHERENT;
-	args.feature_mask = RTC_FEATURE_FLAG_NONE;
-#if USE_ARGUMENT_CALLBACKS && ENABLE_FILTER_FUNCTION
-	args.filter = nullptr;
-#endif
-
-	// print_bvh(scene);
+	 //print_bvh(scene);
 
 	int			  channels_num = 4;
 	PhysicalImage renderImage(width, height, channels_num);
@@ -232,7 +230,11 @@ int main()
 		raytracerContext.RenderTargetDepth	  = std::make_shared<PhysicalImage32F>(width, height, channels_num);
 	}
 
+#if 1
 	Raytracer raytracer(raytracerContext);
+#else
+	PhotonMapper raytracer(raytracerContext);
+#endif
 
 	BatchBuffer cBatchBuffer;
 	{
@@ -244,6 +246,9 @@ int main()
 	std::thread rtRenderThread([&pbrRender, &raytracerContext, &raytracer]()
 							   { 
 								   raytracer.RenderAsync();
+
+								   PhotonMapper raytracer2(raytracerContext);
+								   raytracer2.RenderAsync();
 							   });
 
 

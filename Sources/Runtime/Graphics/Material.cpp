@@ -2,7 +2,7 @@
 #include "Meshes/Geometry.h"
 #include "VertexBuffer.h"
 #include "Graphics/RxSampler.h"
-#include "Raytracer.h"
+#include "PathTracer/Raytracer.h"
 
 EnvironmentTextures* GetEnvironmentData()
 {
@@ -102,21 +102,31 @@ vec4 Material::GetVec4(const std::string& name) const
 	return ((vec4*)it->second.Data.data())[0];
 }
 
-VertexOutputData RenderCore::InterpolateAttributes(vec2 barycenter, const TMat4x4& worldMatrix, const Geometry* mesh, int primId) noexcept
+template<typename T>
+T Interpolate3Points(bool isCCW, vec2 barycenter, const T& p0, const T& p1, const T& p2)
 {
-	VertexOutputData OutputData;
-
 	const float u = barycenter.x;
 	const float v = barycenter.y;
-	const float s = 1 - u - v;
+	const float w = 1.0f - u - v;
+	return w * p0 + u * p1 + v * p2;
+}
+
+VertexOutputData RenderCore::InterpolateAttributes(vec2 barycenter, vec3 ng, const TMat4x4& worldMatrix, const Geometry* mesh, int primId) noexcept
+{
+	VertexOutputData OutputData;
 
 	uint32 v0, v1, v2;
 	std::tie(v0, v1, v2) = mesh->GetIndexBuffer()->GetVerticesByPrimitiveId(primId);
 
 	Vector3f p0, p1, p2;
-	std::tie(p0, p1, p2) = mesh->GetTripleAttributesByIndex<Vector3f>(VertexBufferAttriKind::POSITION, v0, v1, v2);
+	mesh->GetTripleAttributesByIndex<Vector3f>(VertexBufferAttriKind::POSITION, v0, v1, v2, p0, p1, p2);
+	
 
-	OutputData.Position = u * p0 + v * p1 + s * p2;
+	bool isCCW = glm::dot(glm::cross(p1 - p0, p2 - p0), -ng) > 0;
+	
+	OutputData.Position = Interpolate3Points(isCCW, barycenter, p0, p1, p2);
+
+	
 
 	OutputData.Position = (worldMatrix * vec4(OutputData.Position, 1.0f)).xyz;
 
@@ -125,33 +135,33 @@ VertexOutputData RenderCore::InterpolateAttributes(vec2 barycenter, const TMat4x
 	if (mesh->HasAttribute(VertexBufferAttriKind::TEXCOORD))
 	{
 
-		std::tie(uv0, uv1, uv2) = mesh->GetTripleAttributesByIndex<Vector2f>(VertexBufferAttriKind::TEXCOORD, v0, v1, v2);
+		mesh->GetTripleAttributesByIndex<Vector2f>(VertexBufferAttriKind::TEXCOORD, v0, v1, v2, uv0, uv1, uv2);
 
-		OutputData.Texcoord0   = u * uv0 + v * uv1 + s * uv2;
+		OutputData.Texcoord0   = Interpolate3Points(isCCW, barycenter, uv0, uv1, uv2);
 		OutputData.HasTexcoord = true;
 	}
 
-#if 1
 	if (mesh->HasAttribute(VertexBufferAttriKind::NORMAL))
 	{
 		Vector3f n0, n1, n2;
-		std::tie(n0, n1, n2) = mesh->GetTripleAttributesByIndex<Vector3f>(VertexBufferAttriKind::NORMAL, v0, v1, v2);
+		mesh->GetTripleAttributesByIndex<Vector3f>(VertexBufferAttriKind::NORMAL, v0, v1, v2, n0, n1, n2);
 		n0					 = glm::normalize(n0);
 		n1					 = glm::normalize(n1);
 		n2					 = glm::normalize(n2);
+		Vector3f normal		 = Interpolate3Points(isCCW, barycenter, n0, n1, n2);
 
-		OutputData.Normal	 = glm::normalize(u * n0 + v * n1 + s * n2);
+		OutputData.Normal	 = glm::normalize(normal);
 		OutputData.HasNormal = true;
 	}
 	if (mesh->HasAttribute(VertexBufferAttriKind::TANGENT))
 	{
 		Vector3f t0, t1, t2;
-		std::tie(t0, t1, t2) = mesh->GetTripleAttributesByIndex<Vector3f>(VertexBufferAttriKind::TANGENT, v0, v1, v2);
+		mesh->GetTripleAttributesByIndex<Vector3f>(VertexBufferAttriKind::TANGENT, v0, v1, v2, t0, t1, t2);
 		t0					 = glm::normalize(t0);
 		t1					 = glm::normalize(t1);
 		t2					 = glm::normalize(t2);
 
-		vec3 T				  = glm::normalize(u * t0 + v * t1 + s * t2);
+		vec3 T = glm::normalize(Interpolate3Points(isCCW, barycenter, t0, t1, t2));
 		T					  = glm::normalize(T - glm::dot(T, OutputData.Normal) * OutputData.Normal); // 计算切线在法线平面上的投影
 		
 		OutputData.HasTangent = true;
@@ -160,58 +170,11 @@ VertexOutputData RenderCore::InterpolateAttributes(vec2 barycenter, const TMat4x
 		OutputData.BiTangent = glm::cross(OutputData.Normal, T); // 计算副切线
 		OutputData.HasBiTangent = true;
 	}
-
-#else
-
-	OutputData.Normal	 = glm::normalize(glm::cross(p1 - p0, p2 - p0));
-	OutputData.HasNormal = true;
-
-	auto	  pos1	   = p0;
-	auto	  pos2	   = p1;
-	auto	  pos3	   = p2;
-	 glm::vec3 edge1	= pos2 - pos1;
-	glm::vec3 edge2	   = pos3 - pos1;
-	glm::vec2 deltaUV1 = uv1 - uv0;
-	glm::vec2 deltaUV2 = uv2 - uv0;
-
-	float f = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
-
-	glm::vec3 tangent1, bitangent1;
-	tangent1.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
-	tangent1.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
-	tangent1.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
-
-	bitangent1.x = f * (-deltaUV2.x * edge1.x + deltaUV1.x * edge2.x);
-	bitangent1.y = f * (-deltaUV2.x * edge1.y + deltaUV1.x * edge2.y);
-	bitangent1.z = f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z);
-
-	OutputData.Tangent	  = tangent1;
-	OutputData.HasTangent = true;
-
-	OutputData.BiTangent	= bitangent1;
-	OutputData.HasBiTangent = true;
-
-	/*if (mesh->HasAttribute(VertexBufferAttriKind::TANGENT))
-	{
-		Vector3f t0, t1, t2;
-		std::tie(t0, t1, t2) = mesh->GetTripleAttributesByIndex<Vector3f>(VertexBufferAttriKind::TANGENT, v0, v1, v2);
-		t0					 = glm::normalize(t0);
-		t1					 = glm::normalize(t1);
-		t2					 = glm::normalize(t2);
-
-		OutputData.Tangent	  = glm::normalize(u * t0 + v * t1 + s * t2);
-		OutputData.HasTangent = true;
-
-		OutputData.BiTangent	= -1.0f * glm::normalize(glm::cross(OutputData.Normal, OutputData.Tangent));
-		OutputData.HasBiTangent = true;
-	}*/
-
-#endif
 	
 	return OutputData;
 }
 
-Color4f RenderCorePBR::Execute(const Raytracer*			   rayTracer,
+RenderOutputData RenderCorePBR::Execute(const Raytracer*			rayTracer,
 							   const GlobalConstantBuffer& cGlobalBuffer,
 							   const VertexOutputData&	   vertexData,
 							   class Material*			   material) noexcept
@@ -446,7 +409,7 @@ vec3 SunLightDirectLignting(vec3 albedo, vec3 normal, vec3 viewDir, vec3 sunDir,
 	return (diffuseBRDF + specularBRDF) * Lradiance * cosLi;
 }
 
-Color4f RenderCorePBR::Shading(const Raytracer*			   rayTracer,
+RenderOutputData RenderCorePBR::Shading(const Raytracer*			rayTracer,
 							   const GlobalConstantBuffer& cGlobalBuffer,
 							   const GBufferData&		   gBufferData,
 							   const EnvironmentTextures&  gEnvironmentData) const noexcept
@@ -528,11 +491,28 @@ Color4f RenderCorePBR::Shading(const Raytracer*			   rayTracer,
 	// gamma correct
 	color = pow(color, vec3(1.0 / 2.2));
 
-	//return vec4(N * 0.5f + vec3(0.5f), 1.0);
-	return vec4(color, 1.0);
+	RenderOutputData output;
+	{
+		output.Color		 = vec4(color, 1.0);
+		output.WorldPosition = WorldPos;
+		output.Normal		 = N;
+	}	
+
+	// calc depth
+	{
+		auto ViewMatrix = cGlobalBuffer.ViewMatrix;
+		auto ProjMatrix = cGlobalBuffer.ProjMatrix;
+		auto mvp		= ProjMatrix * ViewMatrix;
+		vec4 np			= mvp * vec4(WorldPos, 1.0f);
+		np /= np.w;
+		np.xyz = np.xyz * 0.5f + 0.5f;
+		output.Depth = np.z;
+	}
+
+	return output;
 }
 
-Color4f RenderCoreSkybox::Execute(const Raytracer*			  rayTracer,
+RenderOutputData RenderCoreSkybox::Execute(const Raytracer*			   rayTracer,
 								  const GlobalConstantBuffer& cGlobalBuffer,
 								  const VertexOutputData&	  vertexData,
 								  class Material*			  material) noexcept
@@ -547,11 +527,31 @@ Color4f RenderCoreSkybox::Execute(const Raytracer*			  rayTracer,
 
 	vec3 color = textureCubeLod(evnTexture, vertexData.Position.xyz, 0).rgb;
 	auto FragColor = vec4(color, 1.0);
-	return FragColor;
+
+	RenderOutputData output;
+	{
+		output.Color = FragColor;
+		output.WorldPosition = vertexData.Position;
+		output.Normal = vertexData.Normal;
+	}
+
+	// calc depth
+	{
+		auto ViewMatrix = cGlobalBuffer.ViewMatrix;
+		auto ProjMatrix = cGlobalBuffer.ProjMatrix;
+		auto mvp		= ProjMatrix * ViewMatrix;
+		vec4 np			= mvp * vec4(vertexData.Position, 1.0f);
+		np /= np.w;
+		np.xyz		 = np.xyz * 0.5f + 0.5f;
+
+		output.Depth = np.z;
+	}
+
+	return output;
 }
 
 
-Color4f RenderCoreUnlit::Execute(const Raytracer*			   rayTracer,
+RenderOutputData RenderCoreUnlit::Execute(const Raytracer*			  rayTracer,
 							   const GlobalConstantBuffer& cGlobalBuffer,
 							   const VertexOutputData&	   vertexData,
 							   class Material*			   material) noexcept
@@ -563,16 +563,34 @@ Color4f RenderCoreUnlit::Execute(const Raytracer*			   rayTracer,
 
 	static RxSampler* sampler = RxSampler::CreateSampler(RxSamplerType::Linear, RxWrapMode::Repeat);
 
+	RenderOutputData output;
+
 	if (abledoTexture)
 	{
-		return sampler->ReadPixel(abledoTexture.get(), uv.x, uv.y);
+		output.Color = sampler->ReadPixel(abledoTexture.get(), uv.x, uv.y);
 	}
 	else if (material->HasParameter("baseColorFactor"))
 	{
-		return material->GetVec4("baseColorFactor");
+		output.Color =  material->GetVec4("baseColorFactor");
 	}
 	else
 	{
-		return vec4(1.0f);
+		output.Color =  vec4(1.0f);
 	}
+	output.WorldPosition = vertexData.Position;
+	output.Normal = vertexData.Normal;
+
+	// calc depth
+	{
+		auto ViewMatrix = cGlobalBuffer.ViewMatrix;
+		auto ProjMatrix = cGlobalBuffer.ProjMatrix;
+		auto mvp		= ProjMatrix * ViewMatrix;
+		vec4 np			= mvp * vec4(vertexData.Position, 1.0f);
+		np /= np.w;
+		np.xyz = np.xyz * 0.5f + 0.5f;
+
+		output.Depth = np.z;
+	}
+
+	return output;
 }

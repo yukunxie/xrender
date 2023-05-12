@@ -114,9 +114,16 @@ public:
 		Transform_.Scale() = scale;
 	}
 
-	TVector3& GetScale()
+	TVector3 GetScale()
 	{
-		return Transform_.Scale();
+		if (!Parent_)
+		{
+			return Transform_.Scale();
+		}
+		else
+		{
+			return Transform_.Scale() * Parent_->GetScale();
+		}
 	}
 
 	void SetRotation(const TVector3& rotation)
@@ -140,6 +147,13 @@ public:
 		return WorldMatrix_;
 	}
 
+	const TMat4x4& GetNormalMatrix() const
+	{
+		UpdateWorldMatrix();
+
+		return NormalMatrix_;
+	}
+
 	void UpdateWorldMatrix() const;
 
 	void SetSelected(bool selected) { IsSelected_ = selected; }
@@ -154,6 +168,7 @@ protected:
 	std::vector<Entity*>  Children_;
 	std::list<Component*> Components_;
 	mutable TMat4x4		  WorldMatrix_;
+	mutable TMat4x4		  NormalMatrix_;
 	Transform			  Transform_;
 	// boolean fileds
 	bool		 IsSelected_		 = false;

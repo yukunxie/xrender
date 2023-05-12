@@ -53,13 +53,13 @@ struct IndexBuffer
 	{
 		if (indexType == IndexType::UINT32)
 		{
-			auto* triangles = (std::tuple<uint32, uint32, uint32>*)buffer.data();
-			return triangles[primId];
+			const Triangle* triangles = (const Triangle*)buffer.data();
+			return { triangles[primId].v0, triangles[primId].v1, triangles[primId].v2 };
 		}
 		else
 		{
-			auto* triangles = (std::tuple<uint16, uint16, uint16>*)buffer.data();
-			return triangles[primId];
+			const TriangleUint16* triangles = (const TriangleUint16*)buffer.data();
+			return { triangles[primId].v0, triangles[primId].v1, triangles[primId].v2 };
 		}
 	}
 };

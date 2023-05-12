@@ -365,11 +365,11 @@ MeshComponent* MeshComponentBuilder::CreateSkyBox(const Vector3f scale)
 		20, 21, 22, 20, 22, 23,
 	};
 
-	// Convert to CW, because skybox view in the box
-	for (int i = 0; i < indices.size(); i += 3)
-	{
-		std::swap(indices[i], indices[i + 1]);
-	}
+	//// Convert to CW, because skybox view in the box
+	//for (int i = 0; i < indices.size(); i += 3)
+	//{
+	//	std::swap(indices[i], indices[i + 1]);
+	//}
 
 	meshComp->Geometry_->indexBuffer_.indexType = IndexType::UINT32;
 	meshComp->Geometry_->indexBuffer_.InitData(indices.data(), indices.size() * sizeof(indices[0]));
@@ -526,14 +526,14 @@ MeshComponent* MeshComponentBuilder::CreateSphere(const std::string& material)
 	meshComp->Geometry_		= new Geometry;
 	meshComp->Material_		= new Material(material.empty() ? "Materials/PBR.json" : material);
 
-	auto albedoTexture = std::make_shared<Texture2D>("Textures/albedo.png");
-	meshComp->Material_->SetTexture("tAlbedo", albedoTexture);
-	auto matTexture = std::make_shared<Texture2D>("Textures/metallic-roughness.png");
-	meshComp->Material_->SetTexture("tMetallicRoughnessMap", matTexture);
-	auto normalTexture = std::make_shared<Texture2D>("Textures/sphere-normal.png");
-	meshComp->Material_->SetTexture("tNormalMap", normalTexture);
-	auto aoTexture = std::make_shared<Texture2D>("Textures/sphere-ao.png");
-	meshComp->Material_->SetTexture("tAoMap", aoTexture);
+	//auto albedoTexture = std::make_shared<Texture2D>("Textures/albedo.png");
+	//meshComp->Material_->SetTexture("tAlbedo", albedoTexture);
+	//auto matTexture = std::make_shared<Texture2D>("Textures/metallic-roughness.png");
+	//meshComp->Material_->SetTexture("tMetallicRoughnessMap", matTexture);
+	//auto normalTexture = std::make_shared<Texture2D>("Textures/sphere-normal.png");
+	//meshComp->Material_->SetTexture("tNormalMap", normalTexture);
+	//auto aoTexture = std::make_shared<Texture2D>("Textures/sphere-ao.png");
+	//meshComp->Material_->SetTexture("tAoMap", aoTexture);
 
 
 	BindVertexBufferHandle(meshComp, VertexBufferAttriKind::POSITION, InputAttributeFormat::FLOAT3, positions.data(), sizeof(positions[0]) * positions.size());
@@ -557,6 +557,59 @@ MeshComponent* MeshComponentBuilder::CreateSphere(const std::string& material)
 
 	meshComp->Geometry_->indexBuffer_.indexType = IndexType::UINT32;
 	meshComp->Geometry_->indexBuffer_.InitData(indices.data(), indices.size() * sizeof(indices[0]));
+
+	return meshComp;
+}
+
+MeshComponent* MeshComponentBuilder::CreatePlane(const std::string& material)
+{
+	MeshComponent* meshComp = new MeshComponent();
+	meshComp->Geometry_		= new Geometry;
+	meshComp->Material_		= new Material(material.empty() ? "Materials/PBR.json" : material);
+
+	std::vector<TVector3> positions = {
+		{ -1.0f, 0.0f, -1.0f },
+		{ 1.0f, 0.0f, -1.0f },
+		{ 1.0f, 0.0f, 1.0f },
+		{ -1.0f, 0.0f, 1.0f },
+	};
+
+	std::vector<TVector3> colors = {
+		{ 1.0f, 1.0f, 1.0f },
+		{ 1.0f, 1.0f, 1.0f },
+		{ 1.0f, 1.0f, 1.0f },
+		{ 1.0f, 1.0f, 1.0f },
+
+	};
+
+	std::vector<TVector2> texCoords = {
+		{ 0.0f, 0.0f },
+		{ 0.0f, 1.0f },
+		{ 1.0f, 1.0f },
+		{ 1.0f, 0.0f },
+		
+	};
+
+	BindVertexBufferHandle(meshComp, VertexBufferAttriKind::POSITION, InputAttributeFormat::FLOAT3, positions.data(), sizeof(positions[0]) * positions.size());
+	BindVertexBufferHandle(meshComp, VertexBufferAttriKind::DIFFUSE, InputAttributeFormat::FLOAT3, colors.data(), sizeof(colors[0]) * colors.size());
+	BindVertexBufferHandle(meshComp, VertexBufferAttriKind::TEXCOORD, InputAttributeFormat::FLOAT2, texCoords.data(), sizeof(texCoords[0]) * texCoords.size());
+
+	std::vector<std::uint32_t> indices = {
+		0, 1, 2, 0, 2, 3
+	};
+
+	std::vector<TVector3> normals = {
+		{ 0.0f, 1.0f, 0.0f },
+		{ 0.0f, 1.0f, 0.0f },
+		{ 0.0f, 1.0f, 0.0f },
+		{ 0.0f, 1.0f, 0.0f },
+	};
+
+	BindVertexBufferHandle(meshComp, VertexBufferAttriKind::NORMAL, InputAttributeFormat::FLOAT3, normals.data(), sizeof(normals[0]) * normals.size());
+
+	meshComp->Geometry_->indexBuffer_.indexType = IndexType::UINT32;
+	meshComp->Geometry_->indexBuffer_.InitData(indices.data(), indices.size() * sizeof(indices[0]));
+
 
 	return meshComp;
 }

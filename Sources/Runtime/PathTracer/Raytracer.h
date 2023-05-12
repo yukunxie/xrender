@@ -4,6 +4,15 @@
 #include "Renderer/PBRRender.h"
 #include "Camera.h"
 
+
+struct RxRay
+{
+	uint32	 Mask = 0xFFFFFFFF;
+	float	 MaxDistance;
+	Vector3f Origion;
+	Vector3f Direction; // normalized
+};
+
 struct RTContext
 {
 	CameraInfo			 Camera;
@@ -29,6 +38,20 @@ struct RTContext
 	}
 };
 
+struct RxIntersection
+{
+	bool	 IsHit;
+	RxRay	 Ray;
+	uint32	 InstanceID;
+	uint32	 GeomID;
+	uint32	 PrimID;
+	Vector2f Barycenter;
+
+	vec2 SampleBRDF(const RTContext& context) noexcept;
+
+	void SampleAttributes(const RTContext& context, VertexOutputData& vertexData, float& roughness, float& metallic);
+};
+
 struct TiledTaskData
 {
 	uint16 SW = 0; // start of height;
@@ -42,10 +65,16 @@ class Raytracer
 public:
 	Raytracer(const RTContext& context);
 
+	virtual ~Raytracer()
+	{
+	}
+
 public:
-	void RenderAsync() noexcept;
+	virtual void RenderAsync() noexcept;
 
 	bool IsShadowRay(vec3 from, vec3 to) const noexcept;
+
+	RxIntersection Intersection(const RxRay& ray) const noexcept;
 
 protected:
 	void ProcessTask(const TiledTaskData& task, const embree::ISPCCamera& ispcCamera) noexcept;
