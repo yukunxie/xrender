@@ -370,10 +370,14 @@ vec2 RxIntersection::SampleBRDF(const RTContext& context) noexcept
 	auto normalTexture	  = material->GetTexture("tNormalMap");
 	auto emissiveTexture  = material->GetTexture("tEmissiveMap");
 
+	vec3 L = glm::normalize(Ray.Direction);
+	vec3 N = vertexData.Normal;
+
+
 	return vec2{0};
 }
 
-void RxIntersection::SampleAttributes(const RTContext& context, VertexOutputData& vertexData, float& roughness, float& metallic)
+void RxIntersection::SampleAttributes(const RTContext& context, VertexOutputData& vertexData, vec3& albedo, float& roughness, float& metallic)
 {
 	auto	  meshProxy = GMeshComponentProxies[InstanceID].MeshComponents[GeomID];
 	Material* material	= meshProxy->GetMaterial();
@@ -387,6 +391,8 @@ void RxIntersection::SampleAttributes(const RTContext& context, VertexOutputData
 	auto emissiveTexture = material->GetTexture("tEmissiveMap");
 
 	static RxSampler* sampler = RxSampler::CreateSampler(RxSamplerType::Linear, RxWrapMode::Repeat);
+
+	albedo = sampler->ReadPixel(abledoTexture.get(), Barycenter.x, Barycenter.y).xyz;
 
 	if (matTexture)
 	{

@@ -245,7 +245,7 @@ int main()
 
 	std::thread rtRenderThread([&pbrRender, &raytracerContext, &raytracer]()
 							   { 
-								   raytracer.RenderAsync();
+								   //raytracer.RenderAsync();
 
 								   PhotonMapper raytracer2(raytracerContext);
 								   raytracer2.RenderAsync();

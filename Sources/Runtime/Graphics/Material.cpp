@@ -327,37 +327,6 @@ vec3 CalculateLight(vec3 albedo, vec3 radiance, vec3 N, vec3 V, vec3 L, vec3 F0,
 	return (kD * albedo / PI + specular) * radiance * max(dot(N, L), 0.0f); // note that we already multiplied the BRDF by the Fresnel (kS) so we won't multiply by kS again
 }
 
-// GGX/Towbridge-Reitz normal distribution function.
-// Uses Disney's reparametrization of alpha = roughness^2.
-float ndfGGX(float cosLh, float roughness)
-{
-	float alpha	  = roughness * roughness;
-	float alphaSq = alpha * alpha;
-
-	float denom = (cosLh * cosLh) * (alphaSq - 1.0) + 1.0;
-	return alphaSq / (PI * denom * denom);
-}
-
-// Single term for separable Schlick-GGX below.
-float gaSchlickG1(float cosTheta, float k)
-{
-	return cosTheta / (cosTheta * (1.0 - k) + k);
-}
-
-// Schlick-GGX approximation of geometric attenuation function using Smith's method.
-float gaSchlickGGX(float cosLi, float cosLo, float roughness)
-{
-	float r = roughness + 1.0;
-	float k = (r * r) / 8.0; // Epic suggests using this roughness remapping for analytic lights.
-	return gaSchlickG1(cosLi, k) * gaSchlickG1(cosLo, k);
-}
-
-// Shlick's approximation of the Fresnel factor.
-vec3 fresnelSchlick(vec3 F0, float cosTheta)
-{
-	return F0 + (vec3(1.0f) - F0) * pow(1.0f - cosTheta, 5.0f);
-}
-
 vec3 SunLightDirectLignting(vec3 albedo, vec3 normal, vec3 viewDir, vec3 sunDir, vec3 sunColor, float metallic, float roughness)
 {
 
@@ -386,11 +355,11 @@ vec3 SunLightDirectLignting(vec3 albedo, vec3 normal, vec3 viewDir, vec3 sunDir,
 	vec3 F0 = mix(Fdielectric, albedo, metallic);
 
 	// Calculate Fresnel term for direct lighting.
-	vec3 F = fresnelSchlick(F0, max(0.0f, dot(Lh, Lo)));
+	vec3 F = F_Schlick( max(0.0f, dot(Lh, Lo)), F0);
 	// Calculate normal distribution for specular BRDF.
-	float D = ndfGGX(cosLh, roughness);
+	float D = D_GGX(cosLh, roughness);
 	// Calculate geometric attenuation for specular BRDF.
-	float G = gaSchlickGGX(cosLi, cosLo, roughness);
+	float G = G_SchlicksmithGGX(cosLi, cosLo, roughness);
 
 	// Diffuse scattering happens due to light being refracted multiple times by a dielectric medium.
 	// Metals on the other hand either reflect or absorb energy, so diffuse contribution is always zero.

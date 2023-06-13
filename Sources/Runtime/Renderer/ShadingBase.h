@@ -9,6 +9,10 @@
 #define PI		3.1415926535897932384626433832795f
 #endif
 
+#ifndef INV_PI
+#	define INV_PI (1/PI)
+#endif
+
 #ifndef Epsilon
 #define Epsilon 0.00001f
 #endif
@@ -73,18 +77,28 @@ FORCEINLINE float saturate(float value)
 }
 
 // Normal Distribution function --------------------------------------
-FORCEINLINE float D_GGX(float dotNH, float roughness)
+// GGX/Towbridge-Reitz normal distribution function.
+// Uses Disney's reparametrization of alpha = roughness^2.
+FORCEINLINE float D_GGX(float NdotH, float roughness)
 {
-	float alpha	 = roughness * roughness;
-	float alpha2 = alpha * alpha;
-	float denom	 = dotNH * dotNH * (alpha2 - 1.0) + 1.0;
-	return (alpha2) / (PI * denom * denom);
+	// We are doing our approximations based on the Trowbridge-Reits GGX:
+	float a2	 = roughness * roughness;
+	NdotH		 = max(NdotH, 0.0f);
+	float NdotH2 = NdotH * NdotH;
+
+	float nom	= a2;
+	float denom = (NdotH2 * (a2 - 1.0) + 1.0);
+	denom		= PI * denom * denom;
+
+	// The normal distribution function returns a value indicating how much o the surface's
+	// microfacets are aligned to the incoming halfway vector.
+	return nom / denom;
 }
 
 // ----------------------------------------------------------------------------
 FORCEINLINE float D_GGX(vec3 N, vec3 H, float roughness)
 {
-	return D_GGX(max(dot(N, H), 0.0f), roughness);
+	return D_GGX(glm::clamp(dot(N, H), 0.0f, 0.99f), roughness);
 }
 
 FORCEINLINE float D_GGX2(float roughness, float NdH)
@@ -131,36 +145,60 @@ FORCEINLINE float G_schlick(float roughness, float NdV, float NdL){
 }
 
 // Fresnel function ----------------------------------------------------
-FORCEINLINE vec3 F_Schlick(float cosTheta, vec3 F0)
+FORCEINLINE vec3 F_Schlick(float VoH, vec3 SpecularColor)
 {
-	return glm::max(vec3(0), F0 + (1.0f - F0) * pow(1.0f - cosTheta, 5.0f));
+	float Fc = glm::pow(1.0f - VoH, 5.0f); // 1 sub, 3 mul
+	// return Fc + (1 - Fc) * SpecularColor;		// 1 add, 3 mad
+
+	// Anything less than 2% is physically impossible and is instead considered to be shadowing
+	return saturate(50.0 * SpecularColor.g) * Fc + (1 - Fc) * SpecularColor;
+
+	//return glm::max(vec3(0), F0 + (1.0f - F0) * pow(1.0f - cosTheta, 5.0f));
 }
 FORCEINLINE vec3 F_SchlickR(float cosTheta, vec3 F0, float roughness)
 {
 	return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(1.0f - cosTheta, 5.0f);
 }
 // ----------------------------------------------------------------------------
-FORCEINLINE float GeometrySchlickGGX(float NdotV, float roughness)
+FORCEINLINE float GeometrySchlickGGX(float NdotV, float k)
 {
-	float r = (roughness + 1.0f);
-	float k = (r * r) / 8.0f;
-
 	float nom	= NdotV;
-	float denom = NdotV * (1.0f - k) + k;
-
+	float denom = NdotV * (1.0 - k) + k;
 	return nom / denom;
 }
-// ----------------------------------------------------------------------------
-FORCEINLINE float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
-{
-	float NdotV = max(dot(N, V), 0.0f);
-	float NdotL = max(dot(N, L), 0.0f);
-	float ggx2	= GeometrySchlickGGX(NdotV, roughness);
-	float ggx1	= GeometrySchlickGGX(NdotL, roughness);
 
+FORCEINLINE float GeometrySmith(float NdotV, float NdotL, float Roughness)
+{
+	float squareRoughness = Roughness * Roughness;
+	float k				  = squareRoughness / 2.0f;
+	//pow(squareRoughness + 1, 2) / 8;
+	float ggx1			  = GeometrySchlickGGX(NdotV, k); // 视线方向的几何遮挡
+	float ggx2			  = GeometrySchlickGGX(NdotL, k); // 光线方向的几何阴影
 	return ggx1 * ggx2;
 }
 
+// The Fresnel Equation
+FORCEINLINE  vec3 fresnelSchlick(float cosTheta, vec3 F0)
+{
+	// cosTheta, the dot product between the surface's normal and the halfway vector.
+	// F0, vector describing the base reflectivity of the surface
+
+	/*
+	 We are doing our approximation based on the Fesnel-Schlick:
+	 The Fresnel Equtation describes the ration of light that gets reflected,
+	 over the light that gets reflacted.
+	*/
+
+	return F0 + (1.0f - F0) * pow(1.0f - cosTheta, 5.f);
+}
+
+// --------------------------------------------------------`--------------------
+FORCEINLINE float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
+{
+	float NdotV			  = max(dot(N, V), 0.0f);
+	float NdotL			  = max(dot(N, L), 0.0f);
+	return GeometrySmith(NdotV, NdotL, roughness);
+}
 
 FORCEINLINE vec2 SampleSphericalMap(vec3 v)
 {

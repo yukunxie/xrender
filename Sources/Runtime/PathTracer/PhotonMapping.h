@@ -11,5 +11,5 @@ public:
 	virtual void RenderAsync() noexcept;
 
 protected:
-	void EmitPhoton(const RxRay& ray, vec4 flux, const LightData& light) noexcept;
+	void EmitPhoton(int depth, const RxRay& ray, vec4 flux, const LightData& light) noexcept;
 };

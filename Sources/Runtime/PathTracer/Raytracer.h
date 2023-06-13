@@ -49,7 +49,7 @@ struct RxIntersection
 
 	vec2 SampleBRDF(const RTContext& context) noexcept;
 
-	void SampleAttributes(const RTContext& context, VertexOutputData& vertexData, float& roughness, float& metallic);
+	void SampleAttributes(const RTContext& context, VertexOutputData& vertexData, vec3& albedo, float& roughness, float& metallic);
 };
 
 struct TiledTaskData
