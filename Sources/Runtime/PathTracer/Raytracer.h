@@ -3,7 +3,29 @@
 #include "Graphics/PhysicalImage.h"
 #include "Renderer/PBRRender.h"
 #include "Camera.h"
+#include <random>
 
+
+#define HITBOCKSIZE 8
+
+#if HITBOCKSIZE == 1
+#	define GET_RTC_PARAM(ARGS, INDEX) (ARGS)
+#else
+#	define GET_RTC_PARAM(ARGS, INDEX) (ARGS[INDEX])
+#endif
+
+#if HITBOCKSIZE == 8
+#	define RAY_TYPE						 RTCRayHit8
+#	define RAY_INTERSECT(MASK, SCENE, RYAS) rtcIntersect8(MASK, SCENE, &RYAS)
+#elif HITBOCKSIZE == 4
+#	define RAY_TYPE						 RTCRayHit4
+#	define RAY_INTERSECT(MASK, SCENE, RYAS) rtcIntersect4(MASK, SCENE, &RYAS)
+#elif HITBOCKSIZE == 1
+#	define RAY_TYPE						 RTCRayHit
+#	define RAY_INTERSECT(MASK, SCENE, RYAS) rtcIntersect1(SCENE, &RYAS)
+#else
+static_assert(false);
+#endif
 
 struct RxRay
 {
@@ -12,6 +34,26 @@ struct RxRay
 	Vector3f Origion;
 	Vector3f Direction; // normalized
 };
+
+struct RxRayHit : public RTCRayHit
+{
+};
+
+struct RayHitResult
+{
+	bool			 IsHit = false;
+	Material*		 Mat   = nullptr;
+	VertexOutputData VertexData;
+};
+
+FORCEINLINE float GenerateRandom()
+{
+	static std::random_device				rd;
+	static std::mt19937						gen(rd());
+	static std::uniform_real_distribution<> dis(0, 1);
+
+	return dis(gen);
+}
 
 struct RTContext
 {
@@ -76,9 +118,17 @@ public:
 
 	RxIntersection Intersection(const RxRay& ray) const noexcept;
 
+public:
+	static vec3 GetReflection(vec3 Li, vec3 Normal, float rougness) noexcept;
+	static vec3 RandomInUnitSphere() noexcept;
+
 protected:
 	void ProcessTask(const TiledTaskData& task, const embree::ISPCCamera& ispcCamera) noexcept;
 
+	static RAY_TYPE SetupRays(const std::vector<std::pair<int, int>>& pixels, const embree::ISPCCamera& ispcCamera, size_t startIndex, int* validMasks);
+
+	RayHitResult GetRayHitResult(const RxRayHit& hit) noexcept;
+	
 
 protected:
 	static const int NUM_CORE = 16;

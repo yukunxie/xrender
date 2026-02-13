@@ -417,11 +417,13 @@ RenderOutputData RenderCorePBR::Shading(const Raytracer*			rayTracer,
 
 		if (!rayTracer->IsShadowRay(gBufferData.Position, lightPos))
 		{
-			Lo += glm::max(vec3(0), CalculateLight(albedo, radiance, N, V, L, F0, metallic, roughness));
+			vec3 l = glm::max(vec3(0), CalculateLight(albedo, radiance, N, V, L, F0, metallic, roughness));
+			Lo += l;
 		}
 	}
 
 	// Add directional light
+	//if (0)
 	{
 		vec3 sunDir	  = -1.0f * glm::normalize(cGlobalBuffer.SunLight);
 		vec3 sunColor = cGlobalBuffer.SunLightColor.xyz;
@@ -450,15 +452,16 @@ RenderOutputData RenderCorePBR::Shading(const Raytracer*			rayTracer,
 	vec2		brdf			   = texture2D(gEnvironmentData.BRDFTexture, vec2(max(dot(N, V), 0.0f), roughness)).rg;
 	vec3		specular		   = prefilteredColor * (F * brdf.x + brdf.y);
 
-	vec3 ambient = (kD * diffuse + specular + gBufferData.EmissiveColor) * ao;
+	//vec3 ambient = (kD * diffuse + specular + gBufferData.EmissiveColor) * ao;
+	vec3 ambient = vec3(0);
 
 	vec3 color = ambient + Lo;
 
-	// HDR tonemapping
-	//color = color / (color + vec3(1.0));
-	color = ACESToneMapping(color /* * 4.5f*/, 1.0f);
-	// gamma correct
-	color = pow(color, vec3(1.0 / 2.2));
+	//// HDR tonemapping
+	////color = color / (color + vec3(1.0));
+	//color = ACESToneMapping(color /* * 4.5f*/, 1.0f);
+	//// gamma correct
+	//color = pow(color, vec3(1.0 / 2.2));
 
 	RenderOutputData output;
 	{

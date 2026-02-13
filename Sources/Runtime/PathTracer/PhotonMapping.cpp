@@ -50,15 +50,6 @@ static bool RussianRoulette(float P)
 	return dis(gen) < P;
 }
 
-static float GenerateRandom()
-{
-	static std::random_device				rd;
-	static std::mt19937						gen(rd());
-	static std::uniform_real_distribution<> dis(0, 1);
-
-	return dis(gen);
-}
-
 PhotonMapper::PhotonMapper(const RTContext& context)
 	: Raytracer(context)
 {

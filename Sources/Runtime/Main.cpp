@@ -36,6 +36,7 @@
 #include "Graphics/Material.h"
 #include "PathTracer/Raytracer.h"
 #include "PathTracer/PhotonMapping.h"
+#include "PathTracer/PathTracing.h"
 #include "Renderer/PBRRender.h"
 
 std::map<int, RTInstanceData> GMeshComponentProxies;
@@ -163,11 +164,13 @@ int main()
 		float	  length = 5.0f;			// 立方体边长的一半
 		vec3	  pointLightColor = vec3(100.0f, 100.0f, 100.0f);
 
-		for (int i = 0; i < 5; ++i)
+		const int LightN = 0;
+
+		for (int i = 0; i < LightN; ++i)
 		{
-			for (int j = 0; j < 5; ++j)
+			for (int j = 0; j < LightN; ++j)
 			{
-				glm::vec3 vertex0(center.x + length * (i - 2), center.y, center.z + length * (j - 2));
+				glm::vec3 vertex0(center.x + length * (i - (LightN / 2)), center.y, center.z + length * (j - (LightN / 2)));
 				vec3	  randomColor = GetRandomColor();
 				cGlobalBuffer.Lights.emplace_back(vertex0, pointLightColor , randomColor);
 			}
@@ -230,10 +233,14 @@ int main()
 		raytracerContext.RenderTargetDepth	  = std::make_shared<PhysicalImage32F>(width, height, channels_num);
 	}
 
-#if 1
+#define RenaderType 3
+
+#if (RenaderType == 1)
 	Raytracer raytracer(raytracerContext);
-#else
+#elif (RenaderType == 2)
 	PhotonMapper raytracer(raytracerContext);
+#else
+	PathTracing raytracer(raytracerContext);
 #endif
 
 	BatchBuffer cBatchBuffer;
@@ -245,10 +252,10 @@ int main()
 
 	std::thread rtRenderThread([&pbrRender, &raytracerContext, &raytracer]()
 							   { 
-								   //raytracer.RenderAsync();
+								   raytracer.RenderAsync();
 
-								   PhotonMapper raytracer2(raytracerContext);
-								   raytracer2.RenderAsync();
+								  /* PhotonMapper raytracer2(raytracerContext);
+								   raytracer2.RenderAsync();*/
 							   });
 
 

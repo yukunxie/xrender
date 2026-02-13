@@ -36,27 +36,6 @@
 #include <glm/glm.hpp>
 #include <glm/geometric.hpp>  
 
-#define HITBOCKSIZE 8
-
-#if HITBOCKSIZE == 1
-#	define GET_RTC_PARAM(ARGS, INDEX) (ARGS)
-#else
-#	define GET_RTC_PARAM(ARGS, INDEX) (ARGS[INDEX])
-#endif
-
-#if HITBOCKSIZE == 8
-#	define RAY_TYPE RTCRayHit8
-#	define RAY_INTERSECT(MASK, SCENE, RYAS) rtcIntersect8(MASK, SCENE, &RYAS)
-#elif HITBOCKSIZE == 4
-#	define RAY_TYPE RTCRayHit4
-#	define RAY_INTERSECT(MASK, SCENE, RYAS) rtcIntersect4(MASK, SCENE, &RYAS)
-#elif HITBOCKSIZE == 1
-#	define RAY_TYPE RTCRayHit
-#	define RAY_INTERSECT(MASK, SCENE, RYAS) rtcIntersect1(SCENE, &RYAS)
-#else
-    static_assert(false);
-#endif
-
 
 extern std::map<int, RTInstanceData> GMeshComponentProxies;
 
@@ -202,7 +181,7 @@ void Raytracer::RenderAsync() noexcept
 	}
 }
 
-RAY_TYPE SetupRays(const std::vector<std::pair<int, int>>& pixels, const embree::ISPCCamera& ispcCamera, size_t startIndex, int* validMasks)
+RAY_TYPE Raytracer::SetupRays(const std::vector<std::pair<int, int>>& pixels, const embree::ISPCCamera& ispcCamera, size_t startIndex, int* validMasks)
 {
 	RAY_TYPE rayhits;
 
@@ -305,24 +284,33 @@ void Raytracer::ProcessTask(const TiledTaskData& task, const embree::ISPCCamera&
 
 bool Raytracer::IsShadowRay(vec3 from, vec3 to) const noexcept
 {
-	RTCRayHit rayhit;
+	RTCRay ray;
 	vec3	  dir	  = to - from;
-	rayhit.ray.org_x  = from.x;
-	rayhit.ray.org_y  = from.y;
-	rayhit.ray.org_z  = from.z;
-	rayhit.ray.dir_x  = dir.x;
-	rayhit.ray.dir_y  = dir.y;
-	rayhit.ray.dir_z  = dir.z;
-	rayhit.ray.tnear  = 0.000001f;
-	rayhit.ray.tfar	  = glm::length(dir);
-	rayhit.ray.time	  = 0;
-	rayhit.ray.mask	  = 0xFFFFFFFF;
-	rayhit.hit.geomID = RTC_INVALID_GEOMETRY_ID;
-	rayhit.hit.instID[0] = RTC_INVALID_GEOMETRY_ID;
+	ray.org_x  = from.x;
+	ray.org_y  = from.y;
+	ray.org_z  = from.z;
+	ray.dir_x  = dir.x;
+	ray.dir_y  = dir.y;
+	ray.dir_z  = dir.z;
+	ray.tnear  = 0.001f;
+	ray.tfar	  = glm::length(dir);
+	ray.time	  = 0;
+	ray.mask	  = 0xFFFFFFFF;
+	ray.flags		  = 0;
+	//hit.geomID = RTC_INVALID_GEOMETRY_ID;
+	//hit.instID[0] = RTC_INVALID_GEOMETRY_ID;
 
-	rtcIntersect1(mContext.RTScene, &rayhit);
+	rtcOccluded1(mContext.RTScene, &ray);
 
-	return rayhit.hit.instID[0] != 0 && (rayhit.hit.instID[0] != RTC_INVALID_GEOMETRY_ID);
+	if (ray.tfar == -embree::inf.operator float())
+	{
+		return false;
+	}
+	else
+	{
+		return true;
+	}
+	//return rayhit.hit.instID[0] != 0 && (rayhit.hit.instID[0] != RTC_INVALID_GEOMETRY_ID);
 }
 
 RxIntersection Raytracer::Intersection(const RxRay& ray) const noexcept
@@ -405,4 +393,70 @@ void RxIntersection::SampleAttributes(const RTContext& context, VertexOutputData
 		roughness = material->GetFloat("roughnessFactor");
 		metallic  = material->GetFloat("metallicFactor");
 	}
+}
+
+vec3 Raytracer::GetReflection(vec3 Li, vec3 Normal, float rougness) noexcept
+{
+	/*
+	Calculating the reflection direction based on the specular attribute of the material.
+	Either it is a perfect reflection (specular = 1), a perfect diffuse (specular = 0) or
+	something in between.
+	*/
+	vec3 diffuseDir	 = normalize(Normal + RandomInUnitSphere());
+	vec3 specularDir = reflect(Li, Normal);
+
+	vec3 nextDir = mix(diffuseDir, specularDir, rougness);
+	return normalize(nextDir);
+}
+
+vec3 Raytracer::RandomInUnitSphere() noexcept
+{
+	// Returns a random direction in unit sphere (used in the BRDF)
+	float phi	   = 2.0 * PI * GenerateRandom();
+	float cosTheta = 2.0 * GenerateRandom() - 1.0;
+	float u		   = GenerateRandom();
+
+	float theta = acos(cosTheta);
+	float r		= pow(u, 1.0 / 3.0);
+
+	// Change of variables
+	// Spherical Coordinates -> Carthesian Coordinates, to get (x, y, z) values
+	float x = r * sin(theta) * cos(phi);
+	float y = r * sin(theta) * sin(phi);
+	float z = r * cos(theta);
+
+	return glm::normalize(vec3(x, y, z));
+}
+
+RayHitResult Raytracer::GetRayHitResult(const RxRayHit& hit) noexcept
+{
+	float x = hit.ray.dir_x;
+	float y = hit.ray.dir_y;
+	float z = hit.ray.dir_z;
+
+	// The triange is CCW
+	int	  primID	 = hit.hit.primID;
+	int	  geomID	 = hit.hit.geomID;
+	int	  instanceId = hit.hit.instID[0];
+	vec2  uv		 = vec2(hit.hit.u, hit.hit.v);
+	vec3  ng		 = vec3(hit.hit.Ng_x, hit.hit.Ng_y, hit.hit.Ng_z);
+
+	RayHitResult result;
+	if (primID < 0 || geomID < 0 || instanceId < 0)
+	{
+		result.IsHit = false;
+		return result;
+	}
+
+	auto meshProxy = GMeshComponentProxies[instanceId].MeshComponents[geomID];
+	
+	uint32 v0, v1, v2;
+	std::tie(v0, v1, v2) = meshProxy->GetGeometry()->GetIndexBuffer()->GetVerticesByPrimitiveId(primID);
+	const TMat4x4& worldMatrix = meshProxy->GetOwner()->GetWorldMatrix();
+
+	result.VertexData = RenderCore::InterpolateAttributes(uv, ng, worldMatrix, meshProxy->GetGeometry(), primID);
+	result.Mat		  = meshProxy->GetMaterial();
+	result.IsHit	  = true;
+
+	return result;
 }
